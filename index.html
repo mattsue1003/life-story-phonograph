@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>時光留聲機</title>
+<meta name="description" content="家屬陪伴長輩說故事、錄下生命故事的留聲機。資料只存在這台裝置。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;800&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F6EEDF; --paper2:#EFE2CB; --card:#FFFBF3; --ink:#3B2A1E; --ink2:#6B5644;
+  --brown:#7A4B2A; --brown2:#5A341B; --brass:#C99A3E; --brass2:#E7C27A; --red:#A8432F; --green:#4E7A4A;
+  --line:#DCCBAE; --shadow:0 6px 20px rgba(74,45,20,.13);
+  --serif:"Noto Serif TC",serif; --sans:"Noto Sans TC",-apple-system,"PingFang TC",sans-serif;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:20px;line-height:1.6;
+  background-image:radial-gradient(rgba(122,75,42,.05) 1px,transparent 1px);background-size:6px 6px;min-height:100vh}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+.wrap{max-width:860px;margin:0 auto;padding:16px 16px calc(40px + env(safe-area-inset-bottom))}
+header.top{display:flex;align-items:center;gap:12px;padding:6px 0 14px}
+header.top h1{font-family:var(--serif);font-size:26px;margin:0;color:var(--brown2);letter-spacing:2px;flex:1}
+header.top h1 small{display:block;font-family:var(--sans);font-size:14px;color:var(--ink2);letter-spacing:0;font-weight:400}
+.iconbtn{background:none;border:1.5px solid var(--line);border-radius:12px;padding:8px 14px;font-size:17px;color:var(--brown)}
+.iconbtn:hover{background:var(--paper2)}
+section[data-view]{display:none}
+section[data-view].on{display:block;animation:fade .25s ease}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+h2{font-family:var(--serif);color:var(--brown2);font-size:26px;margin:4px 0 12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:var(--shadow);margin-bottom:16px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;border-radius:16px;padding:14px 24px;
+  font-size:21px;font-weight:700;background:var(--brown);color:#FFF6E6;min-height:60px;box-shadow:0 3px 0 var(--brown2)}
+.btn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--brown2)}
+.btn.brass{background:var(--brass);color:#3B2A1E;box-shadow:0 3px 0 #9C7427}
+.btn.ghost{background:transparent;color:var(--brown);border:2px solid var(--brown);box-shadow:none}
+.btn.red{background:var(--red);box-shadow:0 3px 0 #7C2E1F}
+.btn.block{width:100%}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:12px;flex-wrap:wrap}
+.row>.btn{flex:1 1 200px}
+.muted{color:var(--ink2);font-size:17px}
+label.f{display:block;font-weight:700;margin:14px 0 6px;font-size:18px}
+input.t,textarea.t,select.t{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;background:#fff;font-size:20px}
+textarea.t{min-height:120px;resize:vertical;line-height:1.7}
+input.t:focus,textarea.t:focus{outline:3px solid var(--brass2);border-color:var(--brass)}
+
+/* 留聲機 */
+.stage{display:flex;flex-direction:column;align-items:center;text-align:center;padding:6px 0 4px}
+.phono{width:min(330px,82vw);height:auto;display:block}
+#disc,.disc{transform-origin:150px 205px;transform-box:view-box}
+body.spinning #disc{animation:spin 1.8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#arm{transform-origin:258px 168px;transform-box:view-box;transition:transform .6s ease;transform:rotate(-18deg)}
+body.spinning #arm{transform:rotate(0)}
+.hello{font-family:var(--serif);font-size:24px;color:var(--brown2);margin:8px 0 2px}
+
+/* 主題 */
+.cats{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+.cat{border:none;border-radius:16px;padding:16px;text-align:left;background:var(--card);border:1.5px solid var(--line);box-shadow:var(--shadow);min-height:96px}
+.cat b{display:block;font-family:var(--serif);font-size:22px;color:var(--brown2)}
+.cat span{font-size:15px;color:var(--ink2)}
+.cat i{font-style:normal;font-size:30px;float:right;line-height:1}
+.cat.on{border-color:var(--brass);background:#FFF4DB}
+.qs{display:grid;gap:10px;margin-top:14px}
+.q{border:1.5px solid var(--line);background:#fff;border-radius:14px;padding:14px 16px;text-align:left;font-size:21px;display:flex;gap:10px;align-items:center}
+.q:hover{border-color:var(--brass);background:#FFF8EA}
+.q .done{margin-left:auto;font-size:14px;color:var(--green);white-space:nowrap}
+
+/* 錄音 */
+.qbig{font-family:var(--serif);font-size:clamp(26px,5.2vw,36px);line-height:1.45;color:var(--brown2);margin:8px 0 6px;text-align:center}
+.timer{font-variant-numeric:tabular-nums;font-size:34px;font-weight:700;color:var(--brown);text-align:center}
+.rec-dot{display:inline-block;width:14px;height:14px;border-radius:50%;background:var(--red);margin-right:8px;vertical-align:middle;opacity:0}
+body.recording:not(.paused) .rec-dot{opacity:1;animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.2}}
+.meter{height:12px;border-radius:9px;background:var(--paper2);overflow:hidden;margin:10px auto 0;max-width:420px}
+.meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--green),var(--brass));transition:width .08s}
+.bigrec{width:132px;height:132px;border-radius:50%;border:6px solid #fff;background:var(--red);color:#fff;font-size:22px;font-weight:700;
+  box-shadow:0 0 0 3px var(--red),0 8px 22px rgba(168,67,47,.35);display:flex;align-items:center;justify-content:center;flex-direction:column;margin:14px auto}
+.bigrec svg{width:38px;height:38px}
+.tips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.chip{border:1.5px solid var(--line);background:#fff;border-radius:99px;padding:8px 14px;font-size:18px}
+.chip.hit{background:var(--brass2);border-color:var(--brass)}
+details.guide summary{cursor:pointer;font-weight:700;color:var(--brown);font-size:18px}
+details.guide ul{margin:8px 0 0;padding-left:22px;font-size:18px}
+.live{min-height:60px;border:1.5px dashed var(--line);border-radius:12px;padding:10px 14px;font-size:19px;background:#fff;color:var(--ink)}
+.live .interim{color:#A79580}
+.switch{display:flex;align-items:center;gap:10px;font-size:17px;color:var(--ink2);margin-top:10px}
+.switch input{width:24px;height:24px;accent-color:var(--brown)}
+
+/* 唱片櫃 */
+.shelf{display:grid;gap:12px}
+.rec{display:flex;gap:14px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:var(--shadow)}
+.vinyl{flex:0 0 66px;width:66px;height:66px;border-radius:50%;background:radial-gradient(circle,var(--lab,#C99A3E) 0 30%,#1b1410 31% 34%,#2b211b 35% 100%);
+  box-shadow:inset 0 0 0 2px #000,0 2px 6px rgba(0,0,0,.3);position:relative;overflow:hidden}
+.vinyl::after{content:"";position:absolute;inset:0;border-radius:50%;background:repeating-radial-gradient(circle,transparent 0 3px,rgba(255,255,255,.05) 3px 4px)}
+.vinyl.ph{background-size:cover;background-position:center}
+.rec.playing .vinyl{animation:spin 1.8s linear infinite}
+.rec .meta{flex:1;min-width:0}
+.rec .meta b{display:block;font-size:20px;font-family:var(--serif);color:var(--brown2);overflow:hidden;text-overflow:ellipsis}
+.rec .meta span{font-size:15px;color:var(--ink2)}
+.rec .acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.sm{border:1.5px solid var(--line);background:#fff;border-radius:12px;padding:8px 12px;font-size:17px;min-height:46px}
+.sm.play{background:var(--brown);color:#fff;border-color:var(--brown);min-width:64px}
+.empty{text-align:center;padding:30px 10px;color:var(--ink2)}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.filters .chip.on{background:var(--brown);color:#fff;border-color:var(--brown)}
+.photo-prev{max-width:180px;border-radius:12px;display:block;margin-top:8px;border:1px solid var(--line)}
+.stat{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:6px 0 4px}
+.stat div{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:8px 16px;font-size:16px;color:var(--ink2)}
+.stat b{font-size:24px;color:var(--brown2);font-family:var(--serif);margin-right:4px}
+
+/* 對話框 */
+.modal{position:fixed;inset:0;background:rgba(40,25,12,.5);display:none;align-items:center;justify-content:center;padding:16px;z-index:50}
+.modal.on{display:flex}
+.modal .card{max-width:520px;width:100%;max-height:90vh;overflow:auto;margin:0}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(120px);background:var(--brown2);color:#fff;
+  padding:12px 22px;border-radius:14px;font-size:18px;transition:transform .3s;z-index:60;max-width:90vw;text-align:center}
+.toast.on{transform:translateX(-50%) translateY(0)}
+
+/* 故事書（列印） */
+#book{display:none}
+@media print{
+  body{background:#fff;font-size:13pt}
+  .wrap,.modal,.toast,[data-oth-report]{display:none!important}
+  #book{display:block;font-family:var(--serif);color:#222}
+  #book h1{text-align:center;font-size:28pt;margin:40pt 0 6pt}
+  #book .sub{text-align:center;color:#666;margin-bottom:30pt}
+  #book article{page-break-inside:avoid;border-top:1px solid #ccc;padding:14pt 0}
+  #book h3{font-size:16pt;margin:0 0 4pt}
+  #book .m{color:#777;font-size:10pt;font-family:var(--sans)}
+  #book img{max-width:60%;max-height:220pt;margin:8pt 0;border-radius:6pt}
+  #book p{white-space:pre-wrap;line-height:1.8}
+}
+@media (max-width:560px){
+  body{font-size:19px}
+  .rec{flex-wrap:wrap}
+  .rec .acts{width:100%;justify-content:flex-start}
+  .btn{font-size:20px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>時光留聲機<small>陪長輩說故事，把聲音留下來</small></h1>
+    <button class="iconbtn" data-go="home" aria-label="回首頁">首頁</button>
+  </header>
+
+  <!-- 首頁 -->
+  <section data-view="home" class="on">
+    <div class="stage">
+      <svg class="phono" viewBox="0 0 300 300" aria-hidden="true">
+        <defs>
+          <linearGradient id="brass" x1="0" x2="1"><stop offset="0" stop-color="#9C7427"/><stop offset=".45" stop-color="#E7C27A"/><stop offset="1" stop-color="#B0842F"/></linearGradient>
+          <linearGradient id="wood" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8A5530"/><stop offset="1" stop-color="#5A341B"/></linearGradient>
+          <radialGradient id="hornIn" cx=".3" cy=".5" r=".7"><stop offset="0" stop-color="#5A3A12"/><stop offset="1" stop-color="#C99A3E"/></radialGradient>
+        </defs>
+        <!-- 喇叭 -->
+        <path d="M150 150 C150 110 120 80 70 40 L40 18 C20 50 25 110 60 130 C90 145 120 150 150 160 Z" fill="url(#brass)"/>
+        <ellipse cx="45" cy="72" rx="22" ry="56" transform="rotate(28 45 72)" fill="url(#hornIn)"/>
+        <rect x="143" y="148" width="14" height="40" rx="5" fill="#9C7427"/>
+        <!-- 木箱 -->
+        <rect x="40" y="225" width="220" height="56" rx="8" fill="url(#wood)"/>
+        <rect x="52" y="238" width="196" height="30" rx="5" fill="none" stroke="#C99A3E" stroke-width="1.5" opacity=".6"/>
+        <!-- 唱盤 -->
+        <ellipse cx="150" cy="226" rx="112" ry="10" fill="#3B2412"/>
+        <g id="disc">
+          <circle cx="150" cy="205" r="80" fill="#1d1612"/>
+          <circle cx="150" cy="205" r="68" fill="none" stroke="#3a2e26" stroke-width="1"/>
+          <circle cx="150" cy="205" r="56" fill="none" stroke="#3a2e26" stroke-width="1"/>
+          <circle cx="150" cy="205" r="44" fill="none" stroke="#3a2e26" stroke-width="1"/>
+          <circle cx="150" cy="205" r="26" fill="#A8432F"/>
+          <path d="M134 199 h32" stroke="#F6EEDF" stroke-width="2.5" stroke-linecap="round"/>
+          <path d="M140 211 h20" stroke="#F6EEDF" stroke-width="2" stroke-linecap="round" opacity=".7"/>
+          <circle cx="150" cy="205" r="3.5" fill="#E7C27A"/>
+          <path d="M95 175 A70 70 0 0 1 130 145" stroke="rgba(255,255,255,.18)" stroke-width="5" fill="none" stroke-linecap="round"/>
+        </g>
+        <!-- 唱臂 -->
+        <g id="arm">
+          <circle cx="258" cy="168" r="9" fill="url(#brass)"/>
+          <path d="M258 168 L232 232 L200 238" stroke="url(#brass)" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect x="190" y="232" width="16" height="10" rx="2" fill="#9C7427"/>
+        </g>
+      </svg>
+      <div class="hello" id="hello">歡迎來到時光留聲機</div>
+      <div class="stat" id="stat"></div>
+    </div>
+    <div class="card">
+      <div class="row">
+        <button class="btn" data-go="topics">開始聊天</button>
+        <button class="btn brass" data-go="shelf">打開唱片櫃</button>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn ghost" id="randomBtn">隨機抽一個話題</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2 style="font-size:22px">今天陪誰說故事？</h2>
+      <label class="f" for="elderName">長輩稱呼</label>
+      <input class="t" id="elderName" placeholder="例如：阿嬤、外公、王伯伯">
+      <label class="f" for="elderYear">出生年（可不填）</label>
+      <input class="t" id="elderYear" inputmode="numeric" placeholder="例如：1945">
+      <p class="muted" style="margin:10px 0 0">所有錄音只存在這台手機或電腦，不會上傳。換裝置前請到唱片櫃「備份」。</p>
+    </div>
+  </section>
+
+  <!-- 選題 -->
+  <section data-view="topics">
+    <h2>想聊哪一段人生？</h2>
+    <div class="cats" id="cats"></div>
+    <div class="qs" id="qs"></div>
+    <div class="card" style="margin-top:16px">
+      <label class="f" for="customQ" style="margin-top:0">或自己出一題</label>
+      <div class="row">
+        <input class="t" id="customQ" placeholder="例如：您還記得第一次坐火車嗎？" style="flex:3 1 260px">
+        <button class="btn" id="customGo" style="flex:1 1 120px">開始</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 錄音 -->
+  <section data-view="record">
+    <div class="card">
+      <div class="muted" id="recCat" style="text-align:center"></div>
+      <div class="qbig" id="recQ"></div>
+      <p class="muted" style="text-align:center;margin:0">請唸出題目，慢慢問，給長輩時間想。</p>
+      <div class="timer"><span class="rec-dot"></span><span id="timer">00:00</span></div>
+      <div class="meter"><i id="meter"></i></div>
+      <button class="bigrec" id="recBtn" aria-label="開始錄音">
+        <svg viewBox="0 0 24 24" fill="currentColor"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0h-2a5 5 0 0 1-10 0z"/><rect x="11" y="18" width="2" height="3"/></svg>
+        <span id="recLabel">開始錄音</span>
+      </button>
+      <div class="row" id="recCtrls" style="display:none">
+        <button class="btn ghost" id="pauseBtn">暫停</button>
+        <button class="btn" id="stopBtn">說完了，收進唱片</button>
+      </div>
+      <label class="switch" id="sttWrap"><input type="checkbox" id="sttOn"> 同時顯示文字（由瀏覽器的語音服務轉寫，需連網）</label>
+      <div class="live" id="live" style="display:none;margin-top:8px"></div>
+    </div>
+    <div class="card">
+      <b style="color:var(--brown)">追問小卡</b> <span class="muted">— 長輩停下來時，點一張問問看</span>
+      <div class="tips" id="followups"></div>
+      <details class="guide" style="margin-top:14px">
+        <summary>陪伴小提醒</summary>
+        <ul>
+          <li>年份、人名記錯沒關係，不用糾正，故事比正確更重要。</li>
+          <li>沉默時先等十秒，長輩常常正在回想。</li>
+          <li>點頭、重複長輩說的最後一句，比換新問題更能讓話接下去。</li>
+          <li>說到傷心事，先陪著、不追問；長輩想停就停。</li>
+          <li>一次聊 10～20 分鐘就好，下次再來。</li>
+        </ul>
+      </details>
+    </div>
+  </section>
+
+  <!-- 保存 -->
+  <section data-view="save">
+    <h2>替這張唱片寫上標籤</h2>
+    <div class="card">
+      <audio id="savePlayer" controls style="width:100%"></audio>
+      <label class="f" for="sTitle">故事名稱</label>
+      <input class="t" id="sTitle">
+      <label class="f" for="sEra">大約是哪一年／幾歲的事？</label>
+      <input class="t" id="sEra" placeholder="例如：民國 50 年、十幾歲時">
+      <label class="f" for="sText">重點紀錄（可以之後再補）</label>
+      <textarea class="t" id="sText" placeholder="記下人名、地名、長輩特別強調的話……"></textarea>
+      <label class="f" for="sPhoto">配一張老照片（可不選）</label>
+      <input type="file" id="sPhoto" accept="image/*">
+      <img id="sPhotoPrev" class="photo-prev" alt="" style="display:none">
+      <div class="row" style="margin-top:18px">
+        <button class="btn ghost" id="discardBtn">不要這段</button>
+        <button class="btn" id="saveBtn">收進唱片櫃</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 唱片櫃 -->
+  <section data-view="shelf">
+    <h2>唱片櫃</h2>
+    <div class="filters" id="filters"></div>
+    <div class="shelf" id="shelfList"></div>
+    <div class="card" style="margin-top:18px">
+      <b style="color:var(--brown)">做成故事書、備份</b>
+      <p class="muted" style="margin:6px 0 12px">故事書可以列印或存成 PDF 送給家人；備份檔包含所有錄音，可以搬到另一台裝置。</p>
+      <div class="row">
+        <button class="btn brass" id="bookBtn">列印生命故事書</button>
+        <button class="btn ghost" id="backupBtn">下載備份</button>
+        <button class="btn ghost" id="restoreBtn">讀入備份</button>
+        <input type="file" id="restoreFile" accept="application/json,.json" hidden>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- 同意對話框 -->
+<div class="modal" id="consent" role="dialog" aria-modal="true" aria-labelledby="cTitle">
+  <div class="card">
+    <h2 id="cTitle">錄音前，先問一聲</h2>
+    <p>請先對長輩說：</p>
+    <p style="font-family:var(--serif);font-size:23px;color:var(--brown2);background:var(--paper2);border-radius:12px;padding:12px 16px">「我想把您說的故事錄下來，留給家裡的孩子聽，好不好？」</p>
+    <p class="muted">長輩說好再開始；中途想停，隨時可以停，也可以刪掉。</p>
+    <div class="row"><button class="btn ghost" id="cNo">先不要</button><button class="btn" id="cYes">長輩答應了</button></div>
+  </div>
+</div>
+
+<!-- 編輯對話框 -->
+<div class="modal" id="editM" role="dialog" aria-modal="true" aria-labelledby="eTitleH">
+  <div class="card">
+    <h2 id="eTitleH">編輯唱片</h2>
+    <label class="f" for="eTitle">故事名稱</label><input class="t" id="eTitle">
+    <label class="f" for="eEra">年代</label><input class="t" id="eEra">
+    <label class="f" for="eText">重點紀錄</label><textarea class="t" id="eText"></textarea>
+    <div class="row" style="margin-top:16px"><button class="btn ghost" id="eCancel">取消</button><button class="btn" id="eSave">儲存</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div id="book"></div>
+<audio id="player" hidden></audio>
+
+<script>
+/* ---------- 題庫 ---------- */
+const CATS=[
+ {id:'child',icon:'🪁',name:'童年時光',tag:'家、玩伴、過年',color:'#C99A3E',qs:[
+  '您小時候住在哪裡？家裡長什麼樣子？','小時候最常玩什麼遊戲？都跟誰一起玩？','小時候過年是怎麼過的？最期待什麼？',
+  '您的爸爸媽媽是怎樣的人？','小時候最喜歡吃什麼？','有沒有小時候闖過的禍，現在想起來會笑的？']},
+ {id:'youth',icon:'📚',name:'求學青春',tag:'學校、朋友、夢想',color:'#6E8B5B',qs:[
+  '您讀過哪些學校？上學要走多遠的路？','印象最深的老師是誰？為什麼？','年輕時最要好的朋友是誰？',
+  '年輕的時候流行什麼歌、什麼打扮？','那時候的夢想是什麼？']},
+ {id:'work',icon:'🔨',name:'工作打拼',tag:'第一份工作、本事',color:'#7A4B2A',qs:[
+  '您的第一份工作是什麼？第一份薪水怎麼用的？','工作上最驕傲的一件事是什麼？','最辛苦的那段日子，是怎麼撐過來的？',
+  '您會的手藝或本事，是誰教您的？']},
+ {id:'family',icon:'💍',name:'成家相伴',tag:'另一半、孩子',color:'#A8432F',qs:[
+  '您和另一半是怎麼認識的？','結婚那天是什麼情形？','第一個孩子出生時，您的心情是怎樣？','家裡最熱鬧的是哪一段日子？']},
+ {id:'home',icon:'🍲',name:'家鄉味道',tag:'習俗、拿手菜、老街',color:'#B5703A',qs:[
+  '家鄉有什麼特別的節慶或習俗？','您有沒有一道拿手菜？是怎麼做的？','以前的市場、街道是什麼樣子？','有沒有一首歌，一聽就想起從前？']},
+ {id:'wisdom',icon:'🌳',name:'人生智慧',tag:'決定、感謝、幸福',color:'#4E6E7A',qs:[
+  '您人生中最重要的一個決定是什麼？','如果能回到過去，想對年輕的自己說什麼？','您覺得什麼是幸福？','這輩子最感謝的人是誰？']},
+ {id:'legacy',icon:'💌',name:'留給家人',tag:'想說的話、傳統',color:'#8A5A86',qs:[
+  '有什麼話想對孫子孫女說？','希望家人記得您的哪些事？','家裡有什麼傳統，希望一直傳下去？']},
+ {id:'custom',icon:'✏️',name:'自訂話題',tag:'家屬自己出的題',color:'#8C7B66',qs:[],hidden:true}
+];
+const FOLLOW=['那時候您幾歲？','還有誰在場？','那是什麼樣子？可以多說一點嗎？','您那時心裡怎麼想？','後來呢？',
+  '聞起來、吃起來是什麼味道？','現在回想起來，是什麼感覺？','這件事有教會您什麼嗎？'];
+const catOf=id=>CATS.find(c=>c.id===id)||CATS[CATS.length-1];
+
+/* ---------- IndexedDB ---------- */
+let dbP;
+function db(){ return dbP||(dbP=new Promise((res,rej)=>{
+  const r=indexedDB.open('life-phono',1);
+  r.onupgradeneeded=()=>{ r.result.createObjectStore('stories',{keyPath:'id'}); r.result.createObjectStore('meta'); };
+  r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
+}));}
+async function tx(store,mode,fn){ const d=await db(); return new Promise((res,rej)=>{
+  const t=d.transaction(store,mode); const out=fn(t.objectStore(store)); t.oncomplete=()=>res(out instanceof IDBRequest?out.result:out); t.onerror=()=>rej(t.error);
+});}
+const putStory=s=>tx('stories','readwrite',st=>st.put(s));
+const delStory=id=>tx('stories','readwrite',st=>st.delete(id));
+const allStories=()=>tx('stories','readonly',st=>st.getAll()).then(a=>(a||[]).sort((x,y)=>y.created-x.created));
+const getMeta=k=>tx('meta','readonly',st=>st.get(k));
+const setMeta=(k,v)=>tx('meta','readwrite',st=>st.put(v,k));
+
+/* ---------- 小工具 ---------- */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=s=>{s=Math.round(s);return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')};
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.h);toast.h=setTimeout(()=>t.classList.remove('on'),2600);}
+function go(v){
+  document.querySelectorAll('section[data-view]').forEach(s=>s.classList.toggle('on',s.dataset.view===v));
+  window.scrollTo({top:0,behavior:'smooth'});
+  if(v==='home') renderHome(); if(v==='shelf') renderShelf(); if(v==='topics') renderTopics();
+}
+document.addEventListener('click',e=>{const g=e.target.closest('[data-go]'); if(g){ if(isRecording()){toast('請先按「說完了」結束錄音');return;} go(g.dataset.go);} });
+
+/* ---------- 長輩資料 ---------- */
+let elder={name:'',year:''};
+async function loadElder(){ elder=(await getMeta('elder'))||elder; $('#elderName').value=elder.name; $('#elderYear').value=elder.year; }
+['#elderName','#elderYear'].forEach(s=>$(s).addEventListener('input',()=>{elder={name:$('#elderName').value.trim(),year:$('#elderYear').value.trim()};setMeta('elder',elder);renderHello();}));
+function renderHello(){ $('#hello').textContent=elder.name?`今天，聽${elder.name}說故事`:'歡迎來到時光留聲機'; }
+async function renderHome(){
+  renderHello();
+  const a=await allStories(); const sec=a.reduce((t,s)=>t+(s.duration||0),0);
+  const cats=new Set(a.map(s=>s.cat)).size;
+  $('#stat').innerHTML=a.length?`<div><b>${a.length}</b>張唱片</div><div><b>${Math.max(1,Math.round(sec/60))}</b>分鐘的聲音</div><div><b>${cats}</b>段人生</div>`:'<div>還沒有唱片，從第一個故事開始吧</div>';
+}
+
+/* ---------- 選題 ---------- */
+let curCat='child', cur={cat:'',q:''};
+async function renderTopics(){
+  const done=new Set((await allStories()).map(s=>s.q));
+  $('#cats').innerHTML=CATS.filter(c=>!c.hidden).map(c=>`<button class="cat ${c.id===curCat?'on':''}" data-cat="${c.id}"><i>${c.icon}</i><b>${c.name}</b><span>${c.tag}</span></button>`).join('');
+  const c=catOf(curCat);
+  $('#qs').innerHTML=c.qs.map(q=>`<button class="q" data-q="${esc(q)}">${esc(q)}${done.has(q)?'<span class="done">✓ 已錄過</span>':''}</button>`).join('');
+}
+$('#cats').addEventListener('click',e=>{const b=e.target.closest('[data-cat]'); if(b){curCat=b.dataset.cat;renderTopics();}});
+$('#qs').addEventListener('click',e=>{const b=e.target.closest('[data-q]'); if(b) startTopic(curCat,b.dataset.q);});
+$('#customGo').addEventListener('click',()=>{const q=$('#customQ').value.trim(); if(!q){toast('請先寫下想問的題目');return;} startTopic('custom',q); $('#customQ').value='';});
+$('#randomBtn').addEventListener('click',async()=>{
+  const done=new Set((await allStories()).map(s=>s.q));
+  const pool=CATS.flatMap(c=>c.qs.map(q=>({c:c.id,q}))); const fresh=pool.filter(p=>!done.has(p.q));
+  const p=(fresh.length?fresh:pool)[Math.floor(Math.random()*(fresh.length||pool.length))]; startTopic(p.c,p.q);
+});
+
+let consented=false;
+async function startTopic(cat,q){
+  cur={cat,q}; const c=catOf(cat);
+  $('#recCat').textContent=c.icon+' '+c.name; $('#recQ').textContent=q;
+  $('#followups').innerHTML=FOLLOW.map(f=>`<button class="chip">${esc(f)}</button>`).join('');
+  resetRecUI(); go('record');
+  consented = consented || !!(await getMeta('consent-'+(elder.name||'_')));
+}
+$('#followups').addEventListener('click',e=>{const b=e.target.closest('.chip'); if(b){b.classList.add('hit'); if(isRecording()) marks.push({t:elapsed(),f:b.textContent});}});
+
+/* ---------- 錄音 ---------- */
+let mr=null, chunks=[], stream=null, t0=0, acc=0, tick=null, actx=null, analyser=null, marks=[], rec=null, finalText='';
+const isRecording=()=>mr&&mr.state!=='inactive';
+const elapsed=()=>acc+(mr&&mr.state==='recording'?(performance.now()-t0)/1000:0);
+function pickType(){ for(const t of ['audio/webm;codecs=opus','audio/mp4','audio/webm','audio/ogg']) if(window.MediaRecorder&&MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(t)) return t; return ''; }
+function resetRecUI(){ $('#timer').textContent='00:00'; $('#meter').style.width='0'; $('#recBtn').style.display='flex'; $('#recCtrls').style.display='none';
+  $('#live').innerHTML=''; $('#live').style.display='none'; $('#pauseBtn').textContent='暫停'; document.body.classList.remove('recording','paused','spinning'); }
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+if(!SR) $('#sttWrap').style.display='none';
+
+$('#recBtn').addEventListener('click',async()=>{
+  if(!consented){ $('#consent').classList.add('on'); return; }
+  beginRec();
+});
+$('#cNo').addEventListener('click',()=>$('#consent').classList.remove('on'));
+$('#cYes').addEventListener('click',()=>{ consented=true; setMeta('consent-'+(elder.name||'_'),Date.now()); $('#consent').classList.remove('on'); beginRec(); });
+
+async function beginRec(){
+  if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){ toast('這個瀏覽器不支援錄音，請改用 Chrome 或 Safari'); return; }
+  try{ stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}}); }
+  catch(e){ toast('沒有麥克風權限，請在瀏覽器設定允許麥克風'); return; }
+  const type=pickType(); mr=new MediaRecorder(stream,type?{mimeType:type}:undefined); chunks=[]; marks=[]; acc=0; finalText='';
+  mr.ondataavailable=e=>{ if(e.data.size) chunks.push(e.data); };
+  mr.onstop=onStopped;
+  mr.start(1000); t0=performance.now();
+  // 音量表
+  try{ actx=new (window.AudioContext||window.webkitAudioContext)(); analyser=actx.createAnalyser(); analyser.fftSize=512;
+    actx.createMediaStreamSource(stream).connect(analyser); }catch(e){}
+  const buf=new Uint8Array(512);
+  tick=setInterval(()=>{ $('#timer').textContent=fmt(elapsed());
+    if(analyser){ analyser.getByteTimeDomainData(buf); let m=0; for(const v of buf) m=Math.max(m,Math.abs(v-128)); $('#meter').style.width=Math.min(100,m/0.9)+'%'; } },100);
+  $('#recBtn').style.display='none'; $('#recCtrls').style.display='flex';
+  document.body.classList.add('recording','spinning');
+  if(SR&&$('#sttOn').checked) startSTT();
+  navigator.wakeLock?.request('screen').then(l=>beginRec.lock=l).catch(()=>{});
+}
+$('#pauseBtn').addEventListener('click',()=>{
+  if(!mr) return;
+  if(mr.state==='recording'){ mr.pause(); acc+= (performance.now()-t0)/1000; $('#pauseBtn').textContent='繼續錄'; document.body.classList.add('paused'); document.body.classList.remove('spinning'); stopSTT(); }
+  else if(mr.state==='paused'){ mr.resume(); t0=performance.now(); $('#pauseBtn').textContent='暫停'; document.body.classList.remove('paused'); document.body.classList.add('spinning'); if(SR&&$('#sttOn').checked) startSTT(); }
+});
+$('#stopBtn').addEventListener('click',()=>{ if(!mr) return; if(mr.state==='recording') acc+=(performance.now()-t0)/1000; mr.stop(); });
+
+let pending=null;
+function onStopped(){
+  clearInterval(tick); stopSTT(); stream?.getTracks().forEach(t=>t.stop()); actx?.close().catch(()=>{}); analyser=null;
+  beginRec.lock?.release?.().catch(()=>{});
+  document.body.classList.remove('recording','paused','spinning');
+  const type=mr.mimeType||chunks[0]?.type||'audio/webm';
+  const blob=new Blob(chunks,{type}); mr=null;
+  if(acc<2||!blob.size){ toast('錄音太短，再試一次'); resetRecUI(); return; }
+  const text=(finalText.trim()?finalText.trim()+'\n':'')+(marks.length?'追問：'+marks.map(m=>`${fmt(m.t)} ${m.f}`).join('、'):'');
+  pending={id:'s'+Date.now(),cat:cur.cat,q:cur.q,audio:blob,type,duration:acc,created:Date.now(),photo:null};
+  $('#savePlayer').src=URL.createObjectURL(blob);
+  $('#sTitle').value=cur.q.replace(/[？?]$/,''); $('#sEra').value=''; $('#sText').value=text; $('#sPhoto').value=''; $('#sPhotoPrev').style.display='none';
+  go('save');
+}
+
+/* 即時文字 */
+let sttWant=false;
+function startSTT(){
+  sttWant=true; $('#live').style.display='block';
+  rec=new SR(); rec.lang='zh-TW'; rec.continuous=true; rec.interimResults=true;
+  rec.onresult=e=>{ let interim=''; for(let i=e.resultIndex;i<e.results.length;i++){ const r=e.results[i]; if(r.isFinal) finalText+=r[0].transcript+'，'; else interim+=r[0].transcript; }
+    $('#live').innerHTML=esc(finalText)+'<span class="interim">'+esc(interim)+'</span>'; };
+  rec.onend=()=>{ if(sttWant&&isRecording()&&mr.state==='recording') try{rec.start()}catch(e){} };
+  rec.onerror=e=>{ if(e.error==='not-allowed'||e.error==='service-not-allowed'){ sttWant=false; toast('這台裝置無法使用文字轉寫，只會錄音'); } };
+  try{ rec.start(); }catch(e){}
+}
+function stopSTT(){ sttWant=false; try{rec&&rec.stop()}catch(e){} }
+
+/* ---------- 保存 ---------- */
+$('#sPhoto').addEventListener('change',async e=>{
+  const f=e.target.files[0]; if(!f) return;
+  pending.photo=await shrinkImg(f,1000); $('#sPhotoPrev').src=URL.createObjectURL(pending.photo); $('#sPhotoPrev').style.display='block';
+});
+function shrinkImg(file,max){ return new Promise(res=>{ const img=new Image(); img.onload=()=>{
+  const k=Math.min(1,max/Math.max(img.width,img.height)); const c=document.createElement('canvas'); c.width=img.width*k; c.height=img.height*k;
+  c.getContext('2d').drawImage(img,0,0,c.width,c.height); c.toBlob(b=>res(b||file),'image/jpeg',.82); URL.revokeObjectURL(img.src); };
+  img.onerror=()=>res(file); img.src=URL.createObjectURL(file); }); }
+$('#saveBtn').addEventListener('click',async()=>{
+  if(!pending) return;
+  Object.assign(pending,{title:$('#sTitle').value.trim()||cur.q,era:$('#sEra').value.trim(),text:$('#sText').value.trim(),elder:elder.name});
+  await putStory(pending); pending=null; toast('已收進唱片櫃 ♪'); go('shelf');
+});
+$('#discardBtn').addEventListener('click',()=>{ if(confirm('確定不保留這段錄音嗎？')){ pending=null; go('topics'); } });
+
+/* ---------- 唱片櫃 ---------- */
+let filter='all', playingId=null, urls=[];
+async function renderShelf(){
+  const a=await allStories(); urls.forEach(URL.revokeObjectURL); urls=[];
+  const used=CATS.filter(c=>a.some(s=>s.cat===c.id));
+  $('#filters').innerHTML=a.length?[`<button class="chip ${filter==='all'?'on':''}" data-f="all">全部 ${a.length}</button>`,
+    ...used.map(c=>`<button class="chip ${filter===c.id?'on':''}" data-f="${c.id}">${c.icon} ${c.name}</button>`)].join(''):'';
+  const list=a.filter(s=>filter==='all'||s.cat===filter);
+  if(!list.length){ $('#shelfList').innerHTML='<div class="empty card">唱片櫃還是空的。<br>去「開始聊天」錄下第一個故事吧！</div>'; return; }
+  $('#shelfList').innerHTML=list.map(s=>{ const c=catOf(s.cat); let ph='';
+    if(s.photo){ const u=URL.createObjectURL(s.photo); urls.push(u); ph=`style="background-image:url(${u})"`; }
+    return `<div class="rec ${playingId===s.id?'playing':''}" data-id="${s.id}">
+      <div class="vinyl ${s.photo?'ph':''}" style="--lab:${c.color}" ${ph}></div>
+      <div class="meta"><b>${esc(s.title)}</b><span>${c.icon} ${c.name}${s.era?'・'+esc(s.era):''}・${fmt(s.duration||0)}・${new Date(s.created).toLocaleDateString('zh-TW')}</span></div>
+      <div class="acts"><button class="sm play" data-a="play">${playingId===s.id?'停止':'播放'}</button><button class="sm" data-a="edit">編輯</button><button class="sm" data-a="dl">下載</button><button class="sm" data-a="del" aria-label="刪除">刪除</button></div>
+    </div>`; }).join('');
+}
+$('#filters').addEventListener('click',e=>{const b=e.target.closest('[data-f]'); if(b){filter=b.dataset.f;renderShelf();}});
+const player=$('#player');
+player.onended=()=>{ playingId=null; renderShelf(); };
+let editing=null;
+$('#shelfList').addEventListener('click',async e=>{
+  const b=e.target.closest('[data-a]'); if(!b) return; const id=b.closest('.rec').dataset.id;
+  const s=(await allStories()).find(x=>x.id===id); if(!s) return;
+  if(b.dataset.a==='play'){
+    if(playingId===id){ player.pause(); playingId=null; }
+    else { player.src=URL.createObjectURL(s.audio); player.play().catch(()=>toast('無法播放這段錄音')); playingId=id; }
+    renderShelf();
+  } else if(b.dataset.a==='dl'){
+    const ext=(s.type||'').includes('mp4')?'m4a':(s.type||'').includes('ogg')?'ogg':'webm';
+    dl(s.audio,`${s.elder?s.elder+'-':''}${s.title}.${ext}`);
+  } else if(b.dataset.a==='del'){
+    if(confirm(`確定刪除「${s.title}」嗎？刪除後無法復原。`)){ if(playingId===id){player.pause();playingId=null;} await delStory(id); renderShelf(); toast('已刪除'); }
+  } else if(b.dataset.a==='edit'){
+    editing=s; $('#eTitle').value=s.title; $('#eEra').value=s.era||''; $('#eText').value=s.text||''; $('#editM').classList.add('on');
+  }
+});
+$('#eCancel').addEventListener('click',()=>$('#editM').classList.remove('on'));
+$('#eSave').addEventListener('click',async()=>{ Object.assign(editing,{title:$('#eTitle').value.trim()||editing.title,era:$('#eEra').value.trim(),text:$('#eText').value.trim()});
+  await putStory(editing); $('#editM').classList.remove('on'); renderShelf(); toast('已儲存'); });
+function dl(blob,name){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name.replace(/[\\/:*?"<>|]/g,''); document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000); }
+
+/* ---------- 故事書 ---------- */
+const b64=blob=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(blob);});
+$('#bookBtn').addEventListener('click',async()=>{
+  const a=(await allStories()).slice().sort((x,y)=>CATS.indexOf(catOf(x.cat))-CATS.indexOf(catOf(y.cat))||x.created-y.created);
+  if(!a.length){ toast('還沒有故事可以印'); return; }
+  const parts=[];
+  for(const s of a){ const c=catOf(s.cat); const img=s.photo?`<img src="${await b64(s.photo)}" alt="">`:'';
+    parts.push(`<article><h3>${esc(s.title)}</h3><div class="m">${c.name}${s.era?'・'+esc(s.era):''}・錄於 ${new Date(s.created).toLocaleDateString('zh-TW')}・問題：${esc(s.q)}</div>${img}<p>${esc(s.text||'（錄音中的故事，請掃描或聆聽原聲）')}</p></article>`); }
+  $('#book').innerHTML=`<h1>${esc(elder.name||'家人')}的生命故事</h1><div class="sub">${elder.year?esc(elder.year)+' 年生・':''}共 ${a.length} 個故事・時光留聲機整理</div>${parts.join('')}`;
+  setTimeout(()=>window.print(),300);
+});
+
+/* ---------- 備份 ---------- */
+$('#backupBtn').addEventListener('click',async()=>{
+  const a=await allStories(); if(!a.length){ toast('還沒有唱片可以備份'); return; }
+  toast('正在打包，請稍等…');
+  const out=[]; for(const s of a) out.push({...s,audio:await b64(s.audio),photo:s.photo?await b64(s.photo):null});
+  dl(new Blob([JSON.stringify({app:'life-phono',v:1,elder,stories:out})],{type:'application/json'}),`時光留聲機備份-${elder.name||'家人'}-${new Date().toISOString().slice(0,10)}.json`);
+});
+$('#restoreBtn').addEventListener('click',()=>$('#restoreFile').click());
+$('#restoreFile').addEventListener('change',async e=>{
+  const f=e.target.files[0]; if(!f) return;
+  try{ const d=JSON.parse(await f.text()); if(d.app!=='life-phono') throw 0;
+    const toBlob=u=>fetch(u).then(r=>r.blob());
+    for(const s of d.stories) await putStory({...s,audio:await toBlob(s.audio),photo:s.photo?await toBlob(s.photo):null});
+    if(!elder.name&&d.elder){ elder=d.elder; setMeta('elder',elder); loadElder(); }
+    toast(`已讀入 ${d.stories.length} 張唱片`); renderShelf();
+  }catch(err){ toast('這不是時光留聲機的備份檔'); }
+  e.target.value='';
+});
+
+window.addEventListener('beforeunload',e=>{ if(isRecording()||pending){ e.preventDefault(); e.returnValue=''; } });
+loadElder().then(renderHome);
+navigator.storage?.persist?.();
+</script>
+
+<!-- 公版「錯誤／建議」回報按鈕 -->
+<script>
+window.REPORT_CONTEXT=()=>({item:document.querySelector('section[data-view].on')?.dataset.view||'',itemName:navigator.userAgent.slice(0,200)});
+window.addEventListener('load',()=>{
+  const host=document.querySelector('[data-oth-report]'); if(!host||!host.shadowRoot) return;
+  const st=document.createElement('style');
+  st.textContent=`.fab{width:34px;height:34px;padding:0;gap:0;justify-content:center;font-size:0;opacity:.72;right:14px;
+      box-shadow:0 2px 8px rgba(0,0,0,.14),0 0 0 1.5px #7A4B2A inset;transition:opacity .2s}
+    .fab:hover,.fab:focus-visible{opacity:1;width:auto;padding:0 12px;gap:6px;font-size:12.5px}
+    .fab svg{width:15px;height:15px}`;
+  host.shadowRoot.appendChild(st);
+  const fab=host.shadowRoot.querySelector('.fab'); if(fab){fab.title='回報錯誤或建議';fab.setAttribute('aria-label','回報錯誤或建議');}
+});
+</script>
+<script src="https://mattsue1003.github.io/oth-report-button/report.js" data-site="時光留聲機" data-color="#7A4B2A" data-label="錯誤／建議" data-offset="16" defer></script>
+</body>
+</html>
