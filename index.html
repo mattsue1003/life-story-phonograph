@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>時光留聲機</title>
 <meta name="description" content="家屬陪伴長輩說故事、錄下生命故事的留聲機。資料只存在這台裝置。">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#7A4B2A">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="時光留聲機">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;800&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
@@ -16,6 +24,7 @@
   --serif:"Noto Serif TC",serif; --sans:"Noto Sans TC",-apple-system,"PingFang TC",sans-serif;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:20px;line-height:1.6;
   background-image:radial-gradient(rgba(122,75,42,.05) 1px,transparent 1px);background-size:6px 6px;min-height:100vh}
@@ -26,7 +35,7 @@ button{cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:tran
 .ico{display:inline-flex;align-items:center;justify-content:center;width:1.7em;height:1.7em;border-radius:50%;background:color-mix(in srgb,var(--c) 22%,#fff);color:var(--c);vertical-align:middle;flex:none}
 .ico svg{width:62%;height:62%;fill:none;stroke:currentColor;stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round}
 .warn{background:#FBE9E3;border:1.5px solid #E2B3A6;color:#7C2E1F;border-radius:12px;padding:10px 14px;font-size:18px;margin:10px 0 0}
-.wrap{max-width:860px;margin:0 auto;padding:16px 16px calc(40px + env(safe-area-inset-bottom))}
+.wrap{max-width:860px;margin:0 auto;padding:calc(16px + env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) calc(40px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
 header.top{display:flex;align-items:center;gap:12px;padding:6px 0 14px}
 header.top h1{font-family:var(--serif);font-size:26px;margin:0;color:var(--brown2);letter-spacing:2px;flex:1}
 header.top h1 small{display:block;font-family:var(--sans);font-size:14px;color:var(--ink2);letter-spacing:0;font-weight:400}
@@ -219,6 +228,14 @@ body.recording [data-oth-report]{display:none!important}
       </div>
       <div class="row" style="margin-top:12px">
         <button class="btn ghost" id="randomBtn">隨機抽一個話題</button>
+      </div>
+    </div>
+    <div class="card" id="installCard" hidden>
+      <b style="color:var(--brown)">把留聲機放到手機主畫面</b>
+      <p class="muted" id="installText" style="margin:6px 0 12px"></p>
+      <div class="row">
+        <button class="btn brass" id="installBtn" hidden>加到主畫面</button>
+        <button class="btn ghost" id="installLater">之後再說</button>
       </div>
     </div>
     <div class="card">
@@ -740,6 +757,26 @@ $('#restoreFile').addEventListener('change',async e=>{
 
 window.addEventListener('beforeunload',e=>{ if(isRecording()||pending){ e.preventDefault(); e.returnValue=''; } });
 loadElder().then(renderHome).then(checkDraft);
+
+/* ---------- 加到主畫面、離線使用 ---------- */
+if('serviceWorker' in navigator&&location.protocol.startsWith('http')) window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+(()=>{
+  const standalone=matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+  let dismissed=false; try{ dismissed=localStorage.getItem('phono-install-later')==='1'; }catch(e){}
+  if(standalone||dismissed) return;
+  const card=$('#installCard'), txt=$('#installText'), btn=$('#installBtn'); let ev=null;
+  const isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent)||(navigator.maxTouchPoints>1&&/Mac/.test(navigator.platform||''));
+  if(isIOS){
+    const safari=!/CriOS|FxiOS|EdgiOS|Line\//i.test(navigator.userAgent);
+    txt.textContent=safari?'點 Safari 下方的「分享」按鈕，再選「加入主畫面」。之後從主畫面的圖示打開，錄音才不會因為太久沒用而被 iPhone 清掉，沒有網路也能用。'
+      :'請改用 Safari 打開這個網址，點「分享」再選「加入主畫面」。從主畫面的圖示打開，錄音才不會被 iPhone 清掉。';
+    card.hidden=false;
+  }
+  window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); ev=e; txt.textContent='加到主畫面後，像 App 一樣一點就開，沒有網路也能用。'; btn.hidden=false; card.hidden=false; });
+  btn.addEventListener('click',async()=>{ if(!ev) return; ev.prompt(); try{ await ev.userChoice; }catch(e){} ev=null; card.hidden=true; });
+  window.addEventListener('appinstalled',()=>{ card.hidden=true; });
+  $('#installLater').addEventListener('click',()=>{ card.hidden=true; try{ localStorage.setItem('phono-install-later','1'); }catch(e){} });
+})();
 navigator.storage?.persist?.();
 </script>
 
