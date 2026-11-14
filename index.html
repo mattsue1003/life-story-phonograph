@@ -284,6 +284,7 @@ details.guide ul{margin:8px 0 0;padding-left:22px;font-size:18px}
     <h2>唱片櫃</h2>
     <div class="filters" id="filters"></div>
     <div class="shelf" id="shelfList"></div>
+    <div class="card" id="space" style="margin-top:18px;display:none"></div>
     <div class="card" style="margin-top:18px">
       <b style="color:var(--brown)">做成故事書、備份</b>
       <p class="muted" style="margin:6px 0 12px">故事書可以列印或存成 PDF 送給家人；備份檔包含所有錄音，可以搬到另一台裝置。</p>
@@ -316,6 +317,26 @@ details.guide ul{margin:8px 0 0;padding-left:22px;font-size:18px}
     <label class="f" for="eEra">年代</label><input class="t" id="eEra">
     <label class="f" for="eText">重點紀錄</label><textarea class="t" id="eText"></textarea>
     <div class="row" style="margin-top:16px"><button class="btn ghost" id="eCancel">取消</button><button class="btn" id="eSave">儲存</button></div>
+  </div>
+</div>
+
+<!-- 休息提醒 -->
+<div class="modal" id="restM" role="dialog" aria-modal="true" aria-labelledby="rTitle">
+  <div class="card">
+    <h2 id="rTitle">已經聊了 <span id="restMin">20</span> 分鐘</h2>
+    <p>前面錄的聲音已經先存好了，就算中斷也不會不見。</p>
+    <p class="muted">問問長輩累不累、要不要喝口水。錄音還在繼續。</p>
+    <div class="row"><button class="btn ghost" id="restGo">繼續聊</button><button class="btn" id="restStop">休息，先收進唱片</button></div>
+  </div>
+</div>
+
+<!-- 救回錄音 -->
+<div class="modal" id="draftM" role="dialog" aria-modal="true" aria-labelledby="dTitle">
+  <div class="card">
+    <h2 id="dTitle">有一段錄音還沒收好</h2>
+    <p id="draftInfo"></p>
+    <p class="muted">可能是上次錄到一半中斷了。要救回來嗎？</p>
+    <div class="row"><button class="btn ghost" id="draftDrop">不要了</button><button class="btn" id="draftKeep">救回來</button></div>
   </div>
 </div>
 
@@ -439,13 +460,16 @@ async function beginRec(){
   catch(e){ toast('沒有麥克風權限，請在瀏覽器設定允許麥克風'); return; }
   const type=pickType(); mr=new MediaRecorder(stream,type?{mimeType:type}:undefined); chunks=[]; marks=[]; acc=0; finalText='';
   mr.ondataavailable=e=>{ if(e.data.size) chunks.push(e.data); };
+  draftId='s'+Date.now(); lastCkpt=0; nextRest=REST_SEC;
   mr.onstop=onStopped;
   mr.start(1000); t0=performance.now();
   // 音量表
   try{ actx=new (window.AudioContext||window.webkitAudioContext)(); analyser=actx.createAnalyser(); analyser.fftSize=512;
     actx.createMediaStreamSource(stream).connect(analyser); }catch(e){}
   const buf=new Uint8Array(512);
-  tick=setInterval(()=>{ $('#timer').textContent=fmt(elapsed());
+  tick=setInterval(()=>{ const el=elapsed(); $('#timer').textContent=fmt(el);
+    if(el-lastCkpt>=CKPT_SEC){ lastCkpt=el; saveDraft(); }
+    if(el>=nextRest){ nextRest+=REST_SEC; saveDraft(); $('#restMin').textContent=Math.round(el/60); $('#restM').classList.add('on'); try{navigator.vibrate?.(300)}catch(e){} }
     if(analyser){ analyser.getByteTimeDomainData(buf); let m=0; for(const v of buf) m=Math.max(m,Math.abs(v-128)); $('#meter').style.width=Math.min(100,m/0.9)+'%'; } },100);
   $('#recBtn').style.display='none'; $('#recCtrls').style.display='flex';
   document.body.classList.add('recording','spinning');
@@ -459,16 +483,40 @@ $('#pauseBtn').addEventListener('click',()=>{
 });
 $('#stopBtn').addEventListener('click',()=>{ if(!mr) return; if(mr.state==='recording') acc+=(performance.now()-t0)/1000; mr.stop(); });
 
+/* 自動先存（每分鐘＋每 20 分鐘提醒時），中斷也救得回來 */
+const REST_SEC=20*60, CKPT_SEC=60;
+let draftId='', lastCkpt=0, nextRest=REST_SEC;
+function saveDraft(){
+  if(!chunks.length) return;
+  const type=mr?.mimeType||chunks[0].type||'audio/webm';
+  setMeta('draft',{id:draftId,cat:cur.cat,q:cur.q,audio:new Blob(chunks,{type}),type,duration:elapsed(),created:Date.now(),text:finalText}).catch(()=>{});
+}
+const clearDraft=()=>tx('meta','readwrite',st=>st.delete('draft')).catch(()=>{});
+$('#restGo').addEventListener('click',()=>$('#restM').classList.remove('on'));
+$('#restStop').addEventListener('click',()=>{ $('#restM').classList.remove('on'); $('#stopBtn').click(); });
+async function checkDraft(){
+  const d=await getMeta('draft'); if(!d||!d.audio||!d.audio.size) return;
+  $('#draftInfo').textContent=`「${d.q}」，大約 ${fmt(d.duration||0)}，錄於 ${new Date(d.created).toLocaleString('zh-TW')}`;
+  $('#draftM').classList.add('on');
+  $('#draftDrop').onclick=()=>{ if(confirm('確定不要這段錄音嗎？')){ clearDraft(); $('#draftM').classList.remove('on'); } };
+  $('#draftKeep').onclick=()=>{ $('#draftM').classList.remove('on'); cur={cat:d.cat,q:d.q};
+    pending={id:d.id||'s'+Date.now(),cat:d.cat,q:d.q,audio:d.audio,type:d.type,duration:d.duration,created:d.created,photo:null};
+    $('#savePlayer').src=URL.createObjectURL(d.audio); $('#sTitle').value=d.q.replace(/[？?]$/,''); $('#sEra').value=''; $('#sText').value=(d.text||'').trim();
+    $('#sPhoto').value=''; $('#sPhotoPrev').style.display='none'; go('save'); };
+}
+
 let pending=null;
 function onStopped(){
+  $('#restM').classList.remove('on');
   clearInterval(tick); stopSTT(); stream?.getTracks().forEach(t=>t.stop()); actx?.close().catch(()=>{}); analyser=null;
   beginRec.lock?.release?.().catch(()=>{});
   document.body.classList.remove('recording','paused','spinning');
   const type=mr.mimeType||chunks[0]?.type||'audio/webm';
   const blob=new Blob(chunks,{type}); mr=null;
-  if(acc<2||!blob.size){ toast('錄音太短，再試一次'); resetRecUI(); return; }
+  if(acc<2||!blob.size){ toast('錄音太短，再試一次'); clearDraft(); resetRecUI(); return; }
+  setMeta('draft',{id:draftId,cat:cur.cat,q:cur.q,audio:blob,type,duration:acc,created:Date.now(),text:finalText}).catch(()=>{});
   const text=(finalText.trim()?finalText.trim()+'\n':'')+(marks.length?'追問：'+marks.map(m=>`${fmt(m.t)} ${m.f}`).join('、'):'');
-  pending={id:'s'+Date.now(),cat:cur.cat,q:cur.q,audio:blob,type,duration:acc,created:Date.now(),photo:null};
+  pending={id:draftId||'s'+Date.now(),cat:cur.cat,q:cur.q,audio:blob,type,duration:acc,created:Date.now(),photo:null};
   $('#savePlayer').src=URL.createObjectURL(blob);
   $('#sTitle').value=cur.q.replace(/[？?]$/,''); $('#sEra').value=''; $('#sText').value=text; $('#sPhoto').value=''; $('#sPhotoPrev').style.display='none';
   go('save');
@@ -499,14 +547,14 @@ function shrinkImg(file,max){ return new Promise(res=>{ const img=new Image(); i
 $('#saveBtn').addEventListener('click',async()=>{
   if(!pending) return;
   Object.assign(pending,{title:$('#sTitle').value.trim()||cur.q,era:$('#sEra').value.trim(),text:$('#sText').value.trim(),elder:elder.name});
-  await putStory(pending); pending=null; toast('已收進唱片櫃 ♪'); go('shelf');
+  await putStory(pending); await clearDraft(); pending=null; toast('已收進唱片櫃 ♪'); go('shelf');
 });
-$('#discardBtn').addEventListener('click',()=>{ if(confirm('確定不保留這段錄音嗎？')){ pending=null; go('topics'); } });
+$('#discardBtn').addEventListener('click',()=>{ if(confirm('確定不保留這段錄音嗎？')){ pending=null; clearDraft(); go('topics'); } });
 
 /* ---------- 唱片櫃 ---------- */
 let filter='all', playingId=null, urls=[];
 async function renderShelf(){
-  const a=await allStories(); urls.forEach(URL.revokeObjectURL); urls=[];
+  const a=await allStories(); urls.forEach(URL.revokeObjectURL); urls=[]; renderSpace(a);
   const used=CATS.filter(c=>a.some(s=>s.cat===c.id));
   $('#filters').innerHTML=a.length?[`<button class="chip ${filter==='all'?'on':''}" data-f="all">全部 ${a.length}</button>`,
     ...used.map(c=>`<button class="chip ${filter===c.id?'on':''}" data-f="${c.id}">${c.icon} ${c.name}</button>`)].join(''):'';
@@ -519,6 +567,24 @@ async function renderShelf(){
       <div class="meta"><b>${esc(s.title)}</b><span>${c.icon} ${c.name}${s.era?'・'+esc(s.era):''}・${fmt(s.duration||0)}・${new Date(s.created).toLocaleDateString('zh-TW')}</span></div>
       <div class="acts"><button class="sm play" data-a="play">${playingId===s.id?'停止':'播放'}</button><button class="sm" data-a="edit">編輯</button><button class="sm" data-a="dl">下載</button><button class="sm" data-a="del" aria-label="刪除">刪除</button></div>
     </div>`; }).join('');
+}
+/* 還能錄多久：用已錄唱片算實際每分鐘大小，沒有唱片時以每分鐘 1 MB 估 */
+async function renderSpace(a){
+  const box=$('#space'); if(!navigator.storage?.estimate){ box.style.display='none'; return; }
+  try{
+    const {usage=0,quota=0}=await navigator.storage.estimate(); if(!quota){ box.style.display='none'; return; }
+    const bytes=a.reduce((t,s)=>t+(s.audio?.size||0),0), secs=a.reduce((t,s)=>t+(s.duration||0),0);
+    const perHour=Math.max(10*1024*1024, secs>60?bytes/secs*3600:60*1024*1024);
+    const free=Math.max(0,quota-usage), hrs=free/perHour;
+    const mb=n=>n>=1024**3?(n/1024**3).toFixed(1)+' GB':Math.max(1,Math.round(n/1024**2))+' MB';
+    const hrsTxt=hrs>=100?'超過 100 小時':hrs>=1?`大約 ${Math.floor(hrs)} 小時`:`大約 ${Math.max(0,Math.floor(hrs*60))} 分鐘`;
+    const pct=quota?Math.min(100,usage/quota*100):0;
+    box.innerHTML=`<b style="color:var(--brown)">這台裝置還能錄 ${hrsTxt}</b>
+      <div class="meter" style="max-width:none;margin:10px 0 6px"><i style="width:${Math.max(2,pct)}%"></i></div>
+      <div class="muted">已用 ${mb(usage)}・唱片共 ${Math.round(secs/60)} 分鐘${secs>60?`・每小時約 ${mb(perHour)}`:''}</div>
+      ${hrs<2?'<p style="color:var(--red);margin:8px 0 0">空間快不夠了，請先「下載備份」再刪掉舊唱片。</p>':''}`;
+    box.style.display='block';
+  }catch(e){ box.style.display='none'; }
 }
 $('#filters').addEventListener('click',e=>{const b=e.target.closest('[data-f]'); if(b){filter=b.dataset.f;renderShelf();}});
 const player=$('#player');
@@ -577,7 +643,7 @@ $('#restoreFile').addEventListener('change',async e=>{
 });
 
 window.addEventListener('beforeunload',e=>{ if(isRecording()||pending){ e.preventDefault(); e.returnValue=''; } });
-loadElder().then(renderHome);
+loadElder().then(renderHome).then(checkDraft);
 navigator.storage?.persist?.();
 </script>
 
