@@ -617,6 +617,21 @@ body.recording [data-oth-report],body.modal-open [data-oth-report]{display:none!
   </div>
 </div>
 
+<div class="modal" id="shareM" role="dialog" aria-modal="true" aria-labelledby="shTitle">
+  <div class="box">
+    <div class="eyebrow">Share</div>
+    <h2 id="shTitle">分享這張唱片</h2>
+    <p id="shStatus">正在轉成每支手機都能播的檔案…</p>
+    <div class="meter2" id="shBarWrap"><i id="shBar" style="width:0"></i></div>
+    <p class="muted" id="shNote"></p>
+    <div class="row" id="shBtns">
+      <button class="btn ghost" id="shCancel">取消</button>
+      <button class="btn outline" id="shSave" hidden>存到這台裝置</button>
+      <button class="btn" id="shGo" hidden>分享到 LINE 等 App</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status"></div>
 <div id="book"></div>
 <audio id="player" hidden></audio>
@@ -717,7 +732,7 @@ window.addEventListener('popstate',e=>{
 });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ const m=document.querySelector('.modal.on'); if(m&&m.id!=='draftM') m.classList.remove('on'); } });
 document.querySelectorAll('.modal').forEach(m=>{
-  m.addEventListener('click',e=>{ if(e.target===m&&!['draftM','consent'].includes(m.id)) m.classList.remove('on'); });
+  m.addEventListener('click',e=>{ if(e.target===m&&!['draftM','consent','shareM'].includes(m.id)) m.classList.remove('on'); });
   new MutationObserver(()=>{ document.body.classList.toggle('modal-open',!!document.querySelector('.modal.on')); if(m.classList.contains('on')&&!isMobile) setTimeout(()=>(m.querySelector('input.t')||m.querySelector('.btn:not(.ghost)'))?.focus({preventScroll:true}),60); }).observe(m,{attributes:true,attributeFilter:['class']});
 });
 
@@ -1022,11 +1037,7 @@ $('#shelfMain').addEventListener('click',async e=>{
     if(playingId!==s.id){ await loadForPlay(s); }
     seekTo(player.currentTime+(a==='fwd'?15:-15));
   } else if(a==='dl'){
-    const ext=(s.type||'').includes('mp4')?'m4a':(s.type||'').includes('ogg')?'ogg':'webm';
-    const name=`${s.elder?s.elder+'-':''}${s.title}.${ext}`.replace(/[\\/:*?"<>|]/g,'');
-    if(isMobile&&navigator.canShare){ try{ const f=new File([s.audio],name,{type:(s.type||'audio/webm').split(';')[0]});
-      if(navigator.canShare({files:[f]})){ await navigator.share({files:[f],title:s.title}); return; } }catch(err){ if(err.name==='AbortError') return; } }
-    dl(s.audio,name);
+    openShare(s);
   } else if(a==='del'){
     if(confirm(`確定刪除「${s.title}」嗎？刪除後無法復原。`)){ if(playingId===s.id){player.pause();playingId=null;} await delStory(s.id); selId=(list[i+1]||list[i-1])?.id||null; renderShelf(); toast('已刪除'); }
   } else if(a==='edit'){
@@ -1048,6 +1059,122 @@ $('#ePhotoDel').addEventListener('click',()=>{ editPhoto=null; $('#ePhoto').valu
 $('#eSave').addEventListener('click',async()=>{ if(editPhoto!==undefined) editing.photo=editPhoto; Object.assign(editing,{title:$('#eTitle').value.trim()||editing.title,era:$('#eEra').value.trim(),text:$('#eText').value.trim()});
   await putStory(editing); close('#editM'); renderShelf(); toast('已儲存'); });
 function dl(blob,name){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name.replace(/[\\/:*?"<>|]/g,''); document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000); }
+
+/* ---------- 分享：轉成每支手機、LINE 都能播的檔案 ----------
+   Android 錄的是 webm，iPhone 和 LINE 播不了。分享時轉成：
+   1) MP4 影片（唱片封面＋聲音）：LINE 聊天室裡直接播放，iPhone、Android 都行
+   2) 做不了影片的瀏覽器 → MP3 音檔，任何手機點開都能聽 */
+const shareCache=new Map();
+const loadScript=(src,glob)=>window[glob]?Promise.resolve():new Promise((res,rej)=>{ const el=document.createElement('script'); el.src=src; el.onload=()=>window[glob]?res():rej(new Error('lib')); el.onerror=()=>rej(new Error('load '+src)); document.head.appendChild(el); });
+const tick0=()=>new Promise(r=>setTimeout(r,0));
+async function decodeMono(blob,rate){
+  const ctx=new OfflineAudioContext(1,Math.max(1,rate),rate);
+  const ab=await ctx.decodeAudioData(await blob.arrayBuffer());
+  if(ab.numberOfChannels===1) return ab.getChannelData(0);
+  const out=new Float32Array(ab.length); for(let c=0;c<ab.numberOfChannels;c++){ const d=ab.getChannelData(c); for(let i=0;i<d.length;i++) out[i]+=d[i]/ab.numberOfChannels; } return out;
+}
+const loadImg=blob=>new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=URL.createObjectURL(blob); });
+async function drawCover(s,W=720){
+  try{ await Promise.all([document.fonts.load('700 40px "Noto Serif TC"'),document.fonts.load('500 20px Cinzel')]); }catch(e){}
+  const c=document.createElement('canvas'); c.width=c.height=W; const x=c.getContext('2d'), cat=catOf(s.cat), k=W/720;
+  x.fillStyle='#000'; x.fillRect(0,0,W,W);
+  const g=x.createRadialGradient(W/2,300*k,10,W/2,300*k,420*k); g.addColorStop(0,'rgba(228,203,134,.22)'); g.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle=g; x.fillRect(0,0,W,W);
+  x.strokeStyle='rgba(228,203,134,.45)'; x.lineWidth=2*k; x.strokeRect(22*k,22*k,W-44*k,W-44*k);
+  x.textAlign='center'; x.fillStyle='#B89A55'; x.font=`500 ${20*k}px Cinzel,serif`; x.fillText('PHONOGRAPH  OF  TIME',W/2,70*k);
+  const cx=W/2, cy=290*k, R=190*k;
+  x.beginPath(); x.arc(cx,cy,R+6*k,0,7); x.fillStyle='#E4CB86'; x.fill();
+  x.beginPath(); x.arc(cx,cy,R,0,7); x.fillStyle='#16120e'; x.fill();
+  x.strokeStyle='rgba(255,255,255,.07)'; x.lineWidth=1.5*k; for(let r=R-14*k;r>R*0.36;r-=12*k){ x.beginPath(); x.arc(cx,cy,r,0,7); x.stroke(); }
+  const L=R*0.34; x.save(); x.beginPath(); x.arc(cx,cy,L,0,7); x.clip();
+  if(s.photo){ try{ const im=await loadImg(s.photo); const sc=Math.max(2*L/im.width,2*L/im.height); x.drawImage(im,cx-im.width*sc/2,cy-im.height*sc/2,im.width*sc,im.height*sc); URL.revokeObjectURL(im.src);}catch(e){ x.fillStyle=cat.color; x.fill(); } }
+  else { x.fillStyle=cat.color; x.fillRect(cx-L,cy-L,2*L,2*L); }
+  x.restore(); x.beginPath(); x.arc(cx,cy,7*k,0,7); x.fillStyle='#000'; x.fill();
+  const title=s.title||s.q, lines=[]; x.font=`700 ${40*k}px "Noto Serif TC",serif`; let line='';
+  for(const ch of title){ if(x.measureText(line+ch).width>W-120*k){ lines.push(line); line=ch; } else line+=ch; } if(line) lines.push(line);
+  if(lines.length>2){ lines.length=2; lines[1]=lines[1].slice(0,-1)+'…'; }
+  x.fillStyle='#F4EEE2'; lines.forEach((l,i)=>x.fillText(l,W/2,(lines.length>1?548:568)*k+i*52*k));
+  x.font=`500 ${24*k}px "Noto Serif TC",serif`; x.fillStyle='#E4CB86';
+  x.fillText([(s.elder||elder.name)?`${s.elder||elder.name}的故事`:'',cat.name,s.era].filter(Boolean).join('　·　'),W/2,650*k);
+  return c;
+}
+async function makeMP4(s,onProg){
+  if(!window.VideoEncoder||!window.AudioEncoder||!window.VideoFrame||!window.AudioData) throw new Error('no-webcodecs');
+  const W=720, vcfg={codec:'avc1.42001f',width:W,height:W,bitrate:350000,framerate:1};
+  if(!(await VideoEncoder.isConfigSupported(vcfg)).supported) throw new Error('no-h264');
+  let acfg=null;
+  for(const r of [24000,22050,44100,48000,16000]){ const cfg={codec:'mp4a.40.2',sampleRate:r,numberOfChannels:1,bitrate:64000}; try{ if((await AudioEncoder.isConfigSupported(cfg)).supported){ acfg=cfg; break; } }catch(e){} }
+  if(!acfg) throw new Error('no-aac');
+  await loadScript('vendor/mp4-muxer.js','Mp4Muxer');
+  onProg(.03,'正在讀取錄音…');
+  const pcm=await decodeMono(s.audio,acfg.sampleRate), sr=acfg.sampleRate, dur=pcm.length/sr;
+  const muxer=new Mp4Muxer.Muxer({target:new Mp4Muxer.ArrayBufferTarget(),video:{codec:'avc',width:W,height:W},audio:{codec:'aac',sampleRate:sr,numberOfChannels:1},fastStart:'in-memory',firstTimestampBehavior:'offset'});
+  let err=null;
+  const venc=new VideoEncoder({output:(c,m)=>muxer.addVideoChunk(c,m),error:e=>err=e}); venc.configure(vcfg);
+  const aenc=new AudioEncoder({output:(c,m)=>muxer.addAudioChunk(c,m),error:e=>err=e}); aenc.configure(acfg);
+  const cover=await drawCover(s,W);
+  const frames=Math.max(1,Math.ceil(dur)), total=frames+Math.ceil(pcm.length/sr);
+  let done=0;
+  for(let i=0;i<frames;i++){
+    if(err) throw err;
+    const f=new VideoFrame(cover,{timestamp:i*1e6,duration:Math.max(1e5,Math.round(Math.min(1,dur-i)*1e6))}); venc.encode(f,{keyFrame:i%10===0}); f.close();
+    while(venc.encodeQueueSize>8) await tick0();
+    if(++done%20===0){ onProg(.05+.9*done/total,'正在做成影片…'); await tick0(); }
+  }
+  for(let off=0;off<pcm.length;off+=sr){
+    if(err) throw err;
+    const d=pcm.slice(off,Math.min(pcm.length,off+sr));
+    const ad=new AudioData({format:'f32-planar',sampleRate:sr,numberOfFrames:d.length,numberOfChannels:1,timestamp:Math.round(off/sr*1e6),data:d}); aenc.encode(ad); ad.close();
+    while(aenc.encodeQueueSize>8) await tick0();
+    if(++done%20===0){ onProg(.05+.9*done/total,'正在做成影片…'); await tick0(); }
+  }
+  await venc.flush(); await aenc.flush(); venc.close(); aenc.close(); if(err) throw err;
+  muxer.finalize();
+  return new Blob([muxer.target.buffer],{type:'video/mp4'});
+}
+async function makeMP3(s,onProg){
+  await loadScript('vendor/lame.min.js','lamejs');
+  onProg(.03,'正在讀取錄音…');
+  const sr=22050, pcm=await decodeMono(s.audio,sr);
+  const enc=new lamejs.Mp3Encoder(1,sr,64), parts=[], B=1152, buf=new Int16Array(B);
+  for(let off=0;off<pcm.length;off+=B){
+    const n=Math.min(B,pcm.length-off), blk=n===B?buf:new Int16Array(n);
+    for(let i=0;i<n;i++){ const v=Math.max(-1,Math.min(1,pcm[off+i])); blk[i]=v<0?v*0x8000:v*0x7FFF; }
+    const out=enc.encodeBuffer(blk); if(out.length) parts.push(new Uint8Array(out));
+    if((off/B)%400===0){ onProg(.05+.9*off/pcm.length,'正在轉成 MP3…'); await tick0(); }
+  }
+  const end=enc.flush(); if(end.length) parts.push(new Uint8Array(end));
+  return new Blob(parts,{type:'audio/mpeg'});
+}
+let shareJob=0, shareFile=null;
+async function openShare(s){
+  const job=++shareJob, key=`${s.id}|${s.title}|${s.era||''}|${s.photo?.size||0}|${s.elder||elder.name}`;
+  const base=`${s.elder||elder.name?(s.elder||elder.name)+'-':''}${s.title}`.replace(/[\\/:*?"<>|]/g,'').slice(0,60);
+  const prog=(p,t)=>{ if(job!==shareJob) return; $('#shBar').style.width=Math.round(p*100)+'%'; if(t) $('#shStatus').textContent=t+` ${Math.round(p*100)}%`; };
+  $('#shTitle').textContent=`分享「${s.title}」`; $('#shNote').textContent=''; $('#shBarWrap').hidden=false; $('#shGo').hidden=true; $('#shSave').hidden=true; $('#shCancel').textContent='取消';
+  prog(0,'正在轉成每支手機都能播的檔案…'); open('#shareM');
+  let r=shareCache.get(key);
+  if(!r){
+    try{ r={blob:await makeMP4(s,prog),ext:'mp4',kind:'video'}; }
+    catch(e1){ console.warn('mp4',e1); if(job!==shareJob) return;
+      try{ r={blob:await makeMP3(s,prog),ext:'mp3',kind:'audio'}; }
+      catch(e2){ console.warn('mp3',e2); if(job!==shareJob) return;
+        const ext=(s.type||'').includes('mp4')?'m4a':'webm'; r={blob:s.audio,ext,kind:'raw'}; } }
+    if(job!==shareJob) return;
+    if(r.kind!=='raw') shareCache.set(key,r);
+  }
+  shareFile=new File([r.blob],`${base}.${r.ext}`,{type:r.blob.type||'application/octet-stream'});
+  prog(1); $('#shBarWrap').hidden=true;
+  $('#shStatus').textContent=r.kind==='video'?'影片做好了！':r.kind==='audio'?'MP3 音檔做好了！':'這台裝置沒辦法轉檔';
+  $('#shNote').textContent=r.kind==='video'?`已做成 MP4 影片（${(r.blob.size/1048576).toFixed(1)} MB），畫面是這張唱片。傳到 LINE 後，iPhone 和 Android 在聊天室裡都能直接播放。`
+    :r.kind==='audio'?`已轉成 MP3（${(r.blob.size/1048576).toFixed(1)} MB），iPhone 和 Android 點開都能聽。`
+    :'只能分享原始錄音檔，有些手機可能打不開。建議改用電腦的 Chrome 或手機的 Safari 再分享一次。';
+  const canShare=!!(navigator.canShare&&(()=>{ try{ return navigator.canShare({files:[shareFile]}); }catch(e){ return false; } })());
+  $('#shGo').hidden=!canShare; $('#shSave').hidden=false; $('#shSave').textContent=canShare?'存到這台裝置':'下載檔案';
+  $('#shCancel').textContent='關閉';
+}
+$('#shGo').addEventListener('click',async()=>{ if(!shareFile) return; try{ await navigator.share({files:[shareFile]}); close('#shareM'); }catch(e){ if(e.name!=='AbortError') toast('沒辦法開啟分享，請改按「存到這台裝置」'); } });
+$('#shSave').addEventListener('click',()=>{ if(shareFile){ dl(shareFile,shareFile.name); toast('已存檔'); } });
+$('#shCancel').addEventListener('click',()=>{ shareJob++; close('#shareM'); });
 
 /* ---------- 故事書頁 ---------- */
 async function renderBook(){

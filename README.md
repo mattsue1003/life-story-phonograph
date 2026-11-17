@@ -9,3 +9,10 @@
 - 不需帳號、沒有後端：錄音只存在使用者自己的瀏覽器（IndexedDB）
 
 單一 `index.html`，不需建置。
+
+## 分享格式
+分享時會在手機上轉檔，讓 iPhone、Android 和 LINE 都能播：
+- 優先做成 MP4 影片（H.264＋AAC，畫面是唱片封面），LINE 聊天室裡可直接播放
+- 瀏覽器不支援 WebCodecs 時改成 MP3
+
+第三方程式庫放在 `vendor/`：[mp4-muxer](https://github.com/Vanilagy/mp4-muxer)（MIT）、[lamejs](https://github.com/zhuker/lamejs)（LGPL-3.0，未修改）。
