@@ -96,6 +96,10 @@ input.t,textarea.t{width:100%;border:1px solid rgba(255,255,255,.2);border-radiu
 input.t::placeholder,textarea.t::placeholder{color:var(--text3)}
 textarea.t{min-height:120px;resize:vertical;line-height:1.7}
 input.t:focus,textarea.t:focus{outline:none;border-color:var(--gold);background:rgba(255,255,255,.09)}
+.line-tip{display:flex;gap:14px;align-items:center;flex-wrap:wrap;border:1px solid rgba(6,199,85,.55);background:rgba(6,199,85,.08);border-radius:14px;padding:16px 18px;margin-bottom:22px}
+.line-tip .txt{flex:1 1 260px;font-size:17px;color:rgba(255,255,255,.9)}
+.line-tip b{color:#5BE08F}
+.line-tip .btn{min-height:50px;flex:none;background:#06C755;color:#fff;box-shadow:none}
 .warn{background:var(--redBg);border:1px solid rgba(255,138,122,.45);color:#FFD2CB;border-radius:12px;padding:12px 16px;font-size:17px;margin:14px 0 0}
 
 /* ---------- 線條留聲機 ---------- */
@@ -378,6 +382,10 @@ body.recording [data-oth-report],body.modal-open [data-oth-report]{display:none!
 
   <!-- ========== 首頁 ========== -->
   <section data-view="home" class="on">
+    <div class="line-tip" id="lineTip" hidden>
+      <div class="txt"><b>你正在 LINE 裡開啟</b><br>LINE 內建的瀏覽器常常沒辦法下載、分享檔案，錄音也可能被 LINE 清掉。建議改用手機的 Safari 或 Chrome 開啟。</div>
+      <button class="btn" data-ext>用手機瀏覽器開啟</button>
+    </div>
     <div class="home-hero">
       <div class="phono-box">
         <svg class="phono draw" viewBox="0 0 300 300" aria-hidden="true">
@@ -624,6 +632,10 @@ body.recording [data-oth-report],body.modal-open [data-oth-report]{display:none!
     <p id="shStatus">正在轉成每支手機都能播的檔案…</p>
     <div class="meter2" id="shBarWrap"><i id="shBar" style="width:0"></i></div>
     <p class="muted" id="shNote"></p>
+    <div class="line-tip" id="shLine" hidden style="margin:14px 0 0">
+      <div class="txt">在 LINE 裡沒辦法直接分享或下載檔案。請先改用手機瀏覽器開啟，再按一次「分享」。</div>
+      <button class="btn" data-ext>用手機瀏覽器開啟</button>
+    </div>
     <div class="row" id="shBtns">
       <button class="btn ghost" id="shCancel">取消</button>
       <button class="btn outline" id="shSave" hidden>存到這台裝置</button>
@@ -677,6 +689,7 @@ const ICON={
   next:'<svg class="i" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>',
   go:'<svg class="i" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>'
 };
+const inLINE=/\bLine\//i.test(navigator.userAgent);
 const isMobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)||(navigator.maxTouchPoints>1&&/Mac/.test(navigator.platform||''));
 
 /* ---------- IndexedDB ---------- */
@@ -1102,15 +1115,22 @@ async function makeMP4(s,onProg){
   const W=720, vcfg={codec:'avc1.42001f',width:W,height:W,bitrate:350000,framerate:1};
   if(!(await VideoEncoder.isConfigSupported(vcfg)).supported) throw new Error('no-h264');
   let acfg=null;
-  for(const r of [24000,22050,44100,48000,16000]){ const cfg={codec:'mp4a.40.2',sampleRate:r,numberOfChannels:1,bitrate:64000}; try{ if((await AudioEncoder.isConfigSupported(cfg)).supported){ acfg=cfg; break; } }catch(e){} }
+  for(const r of [48000,44100]){ const cfg={codec:'mp4a.40.2',sampleRate:r,numberOfChannels:1,bitrate:64000}; try{ if((await AudioEncoder.isConfigSupported(cfg)).supported){ acfg=cfg; break; } }catch(e){} }
   if(!acfg) throw new Error('no-aac');
   await loadScript('vendor/mp4-muxer.js','Mp4Muxer');
   onProg(.03,'正在讀取錄音…');
-  const pcm=await decodeMono(s.audio,acfg.sampleRate), sr=acfg.sampleRate, dur=pcm.length/sr;
+  /* 先用 16k 解碼省記憶體，送進編碼器時再升到 48k／44.1k（手機硬體編碼器最穩的取樣率） */
+  const SRC=16000, src=await decodeMono(s.audio,SRC), sr=acfg.sampleRate, ratio=SRC/sr, dur=src.length/SRC, total0=Math.ceil(src.length/ratio);
+  if(peakOf(src)<1e-4) throw new Error('silent-source');
+  const pcm={length:total0, slice(a,b){ const out=new Float32Array(b-a); for(let i=0;i<out.length;i++){ const x=(a+i)*ratio, k=Math.floor(x), f=x-k; const p=src[k]||0, q=src[k+1]??p; out[i]=p+(q-p)*f; } return out; }};
+  const asc=ascOf(sr,1);
   const muxer=new Mp4Muxer.Muxer({target:new Mp4Muxer.ArrayBufferTarget(),video:{codec:'avc',width:W,height:W},audio:{codec:'aac',sampleRate:sr,numberOfChannels:1},fastStart:'in-memory',firstTimestampBehavior:'offset'});
   let err=null;
   const venc=new VideoEncoder({output:(c,m)=>muxer.addVideoChunk(c,m),error:e=>err=e}); venc.configure(vcfg);
-  const aenc=new AudioEncoder({output:(c,m)=>muxer.addAudioChunk(c,m),error:e=>err=e}); aenc.configure(acfg);
+  /* 有些手機（例如 LINE 內建瀏覽器）不會回傳 AAC 標頭，或回傳空的，會讓影片沒聲音：一律補上正確的標頭 */
+  const fixMeta=m=>{ const dc=m?.decoderConfig; if(!dc) return m; const d=dc.description, ok=d&&(d.byteLength||d.length);
+    return {...m,decoderConfig:{...dc,codec:dc.codec||'mp4a.40.2',sampleRate:sr,numberOfChannels:1,description:ok?d:asc}}; };
+  const aenc=new AudioEncoder({output:(c,m)=>muxer.addAudioChunk(c,fixMeta(m)),error:e=>err=e}); aenc.configure(acfg);
   const cover=await drawCover(s,W);
   const frames=Math.max(1,Math.ceil(dur)), total=frames+Math.ceil(pcm.length/sr);
   let done=0;
@@ -1131,6 +1151,15 @@ async function makeMP4(s,onProg){
   muxer.finalize();
   return new Blob([muxer.target.buffer],{type:'video/mp4'});
 }
+const peakOf=a=>{ let m=0; for(let i=0;i<a.length;i+=7){ const v=Math.abs(a[i]); if(v>m) m=v; } return m; };
+const rmsOf=a=>{ let t=0,n=0; for(let i=0;i<a.length;i+=5){ t+=a[i]*a[i]; n++; } return n?Math.sqrt(t/n):0; };
+function ascOf(rate,ch){ const idx=[96000,88200,64000,48000,44100,32000,24000,22050,16000,12000,11025,8000,7350].indexOf(rate);
+  return new Uint8Array([(2<<3)|(idx>>1),((idx&1)<<7)|(ch<<3)]); }
+/* 做好的檔案再解碼一次，確定真的有聲音（跟原始錄音比音量） */
+async function hasSound(blob,ref){
+  try{ const pcm=await decodeMono(blob,8000); const a=rmsOf(pcm), b=rmsOf(await decodeMono(ref,8000)); return a>Math.max(2e-4,b*0.25); }
+  catch(e){ return false; }
+}
 async function makeMP3(s,onProg){
   await loadScript('vendor/lame.min.js','lamejs');
   onProg(.03,'正在讀取錄音…');
@@ -1150,13 +1179,14 @@ async function openShare(s){
   const job=++shareJob, key=`${s.id}|${s.title}|${s.era||''}|${s.photo?.size||0}|${s.elder||elder.name}`;
   const base=`${s.elder||elder.name?(s.elder||elder.name)+'-':''}${s.title}`.replace(/[\\/:*?"<>|]/g,'').slice(0,60);
   const prog=(p,t)=>{ if(job!==shareJob) return; $('#shBar').style.width=Math.round(p*100)+'%'; if(t) $('#shStatus').textContent=t+` ${Math.round(p*100)}%`; };
-  $('#shTitle').textContent=`分享「${s.title}」`; $('#shNote').textContent=''; $('#shBarWrap').hidden=false; $('#shGo').hidden=true; $('#shSave').hidden=true; $('#shCancel').textContent='取消';
+  $('#shTitle').textContent=`分享「${s.title}」`; $('#shNote').textContent=''; $('#shLine').hidden=true; $('#shBarWrap').hidden=false; $('#shGo').hidden=true; $('#shSave').hidden=true; $('#shCancel').textContent='取消';
   prog(0,'正在轉成每支手機都能播的檔案…'); open('#shareM');
   let r=shareCache.get(key);
   if(!r){
-    try{ r={blob:await makeMP4(s,prog),ext:'mp4',kind:'video'}; }
+    try{ const b=await makeMP4(s,prog); if(job!==shareJob) return; prog(.97,'正在確認影片有聲音…');
+      if(!(await hasSound(b,s.audio))) throw new Error('mp4-silent'); r={blob:b,ext:'mp4',kind:'video'}; }
     catch(e1){ console.warn('mp4',e1); if(job!==shareJob) return;
-      try{ r={blob:await makeMP3(s,prog),ext:'mp3',kind:'audio'}; }
+      try{ const b=await makeMP3(s,prog); if(job!==shareJob) return; if(!(await hasSound(b,s.audio))) throw new Error('mp3-silent'); r={blob:b,ext:'mp3',kind:'audio'}; }
       catch(e2){ console.warn('mp3',e2); if(job!==shareJob) return;
         const ext=(s.type||'').includes('mp4')?'m4a':'webm'; r={blob:s.audio,ext,kind:'raw'}; } }
     if(job!==shareJob) return;
@@ -1169,6 +1199,7 @@ async function openShare(s){
     :r.kind==='audio'?`已轉成 MP3（${(r.blob.size/1048576).toFixed(1)} MB），iPhone 和 Android 點開都能聽。`
     :'只能分享原始錄音檔，有些手機可能打不開。建議改用電腦的 Chrome 或手機的 Safari 再分享一次。';
   const canShare=!!(navigator.canShare&&(()=>{ try{ return navigator.canShare({files:[shareFile]}); }catch(e){ return false; } })());
+  $('#shLine').hidden=!(inLINE&&!canShare);
   $('#shGo').hidden=!canShare; $('#shSave').hidden=false; $('#shSave').textContent=canShare?'存到這台裝置':'下載檔案';
   $('#shCancel').textContent='關閉';
 }
@@ -1233,6 +1264,10 @@ $('#restoreFile').addEventListener('change',async e=>{
   }catch(err){ toast('這不是時光留聲機的備份檔'); }
   e.target.value='';
 });
+
+/* ---------- 在 LINE 內建瀏覽器裡：提示改用手機瀏覽器 ---------- */
+if(inLINE) $('#lineTip').hidden=false;
+document.addEventListener('click',e=>{ if(e.target.closest('[data-ext]')){ const u=new URL(location.href); u.searchParams.set('openExternalBrowser','1'); location.href=u.toString(); } });
 
 /* ---------- 啟動 ---------- */
 window.addEventListener('beforeunload',e=>{ if(isRecording()||pending){ e.preventDefault(); e.returnValue=''; } });
