@@ -96,6 +96,12 @@ input.t,textarea.t{width:100%;border:1px solid rgba(255,255,255,.2);border-radiu
 input.t::placeholder,textarea.t::placeholder{color:var(--text3)}
 textarea.t{min-height:120px;resize:vertical;line-height:1.7}
 input.t:focus,textarea.t:focus{outline:none;border-color:var(--gold);background:rgba(255,255,255,.09)}
+.preview{margin:14px 0 4px;border-radius:12px;overflow:hidden;background:#000;border:1px solid var(--line2)}
+.preview video{display:block;width:100%;max-height:min(46vh,340px);background:#000}
+.preview audio{display:block;width:100%}
+.preview .cap{font-size:14px;color:var(--text3);padding:8px 12px;border-top:1px solid rgba(255,255,255,.08)}
+.foot-note{text-align:center;color:var(--text3);font-size:14px;margin:48px 0 0;line-height:1.7}
+.foot-note b{color:var(--gold3);font-weight:500}
 .line-tip{display:flex;gap:14px;align-items:center;flex-wrap:wrap;border:1px solid rgba(6,199,85,.55);background:rgba(6,199,85,.08);border-radius:14px;padding:16px 18px;margin-bottom:22px}
 .line-tip .txt{flex:1 1 260px;font-size:17px;color:rgba(255,255,255,.9)}
 .line-tip b{color:#5BE08F}
@@ -383,8 +389,8 @@ body.recording [data-oth-report],body.modal-open [data-oth-report]{display:none!
   <!-- ========== 首頁 ========== -->
   <section data-view="home" class="on">
     <div class="line-tip" id="lineTip" hidden>
-      <div class="txt"><b>你正在 LINE 裡開啟</b><br>LINE 內建的瀏覽器常常沒辦法下載、分享檔案，錄音也可能被 LINE 清掉。建議改用手機的 Safari 或 Chrome 開啟。</div>
-      <button class="btn" data-ext>用手機瀏覽器開啟</button>
+      <div class="txt"><b id="appTipTitle">你正在 LINE 裡開啟</b><br><span id="appTipText">App 內建的瀏覽器常常沒辦法錄音、下載或分享檔案，錄音也可能被清掉。請改用 <b>Chrome</b> 或 <b>Safari</b> 開啟，體驗最好。</span></div>
+      <button class="btn" data-ext id="appTipBtn">用 Chrome／Safari 開啟</button>
     </div>
     <div class="home-hero">
       <div class="phono-box">
@@ -565,6 +571,7 @@ body.recording [data-oth-report],body.modal-open [data-oth-report]{display:none!
       </div>
     </div>
   </section>
+  <p class="foot-note">建議使用 <b>Chrome</b> 或 <b>Safari</b> 瀏覽器開啟，錄音、播放、分享最順暢。<br>從 LINE、Facebook 點開時，請改用瀏覽器開啟。</p>
 </main>
 
 <!-- ========== 對話框 ========== -->
@@ -631,10 +638,11 @@ body.recording [data-oth-report],body.modal-open [data-oth-report]{display:none!
     <h2 id="shTitle">分享這張唱片</h2>
     <p id="shStatus">正在轉成每支手機都能播的檔案…</p>
     <div class="meter2" id="shBarWrap"><i id="shBar" style="width:0"></i></div>
+    <div class="preview" id="shPrev" hidden><div id="shMedia"></div><div class="cap">先在這裡試播，確認有畫面、有聲音再分享</div></div>
     <p class="muted" id="shNote"></p>
     <div class="line-tip" id="shLine" hidden style="margin:14px 0 0">
-      <div class="txt">在 LINE 裡沒辦法直接分享或下載檔案。請先改用手機瀏覽器開啟，再按一次「分享」。</div>
-      <button class="btn" data-ext>用手機瀏覽器開啟</button>
+      <div class="txt" id="shLineTxt">在 App 內建的瀏覽器裡，常常沒辦法分享或下載檔案。請改用 <b>Chrome</b> 或 <b>Safari</b> 開啟，再按一次「分享」。</div>
+      <button class="btn" data-ext>用 Chrome／Safari 開啟</button>
     </div>
     <div class="row" id="shBtns">
       <button class="btn ghost" id="shCancel">取消</button>
@@ -689,7 +697,9 @@ const ICON={
   next:'<svg class="i" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>',
   go:'<svg class="i" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>'
 };
-const inLINE=/\bLine\//i.test(navigator.userAgent);
+const UA=navigator.userAgent;
+const inLINE=/\bLine\//i.test(UA);
+const inApp=inLINE?'LINE':/FBAN|FBAV|FB_IAB/i.test(UA)?'Facebook':/Instagram/i.test(UA)?'Instagram':/MicroMessenger/i.test(UA)?'微信':/KAKAOTALK/i.test(UA)?'KakaoTalk':/; wv\)/.test(UA)?'App':'';
 const isMobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)||(navigator.maxTouchPoints>1&&/Mac/.test(navigator.platform||''));
 
 /* ---------- IndexedDB ---------- */
@@ -1174,12 +1184,13 @@ async function makeMP3(s,onProg){
   const end=enc.flush(); if(end.length) parts.push(new Uint8Array(end));
   return new Blob(parts,{type:'audio/mpeg'});
 }
-let shareJob=0, shareFile=null;
+let shareJob=0, shareFile=null, prevUrl='';
+function clearPreview(){ const m=$('#shMedia video,#shMedia audio'); if(m){ m.pause(); m.removeAttribute('src'); m.load(); } $('#shMedia').innerHTML=''; $('#shPrev').hidden=true; if(prevUrl){ URL.revokeObjectURL(prevUrl); prevUrl=''; } }
 async function openShare(s){
   const job=++shareJob, key=`${s.id}|${s.title}|${s.era||''}|${s.photo?.size||0}|${s.elder||elder.name}`;
   const base=`${s.elder||elder.name?(s.elder||elder.name)+'-':''}${s.title}`.replace(/[\\/:*?"<>|]/g,'').slice(0,60);
   const prog=(p,t)=>{ if(job!==shareJob) return; $('#shBar').style.width=Math.round(p*100)+'%'; if(t) $('#shStatus').textContent=t+` ${Math.round(p*100)}%`; };
-  $('#shTitle').textContent=`分享「${s.title}」`; $('#shNote').textContent=''; $('#shLine').hidden=true; $('#shBarWrap').hidden=false; $('#shGo').hidden=true; $('#shSave').hidden=true; $('#shCancel').textContent='取消';
+  $('#shTitle').textContent=`分享「${s.title}」`; $('#shNote').textContent=''; $('#shLine').hidden=true; clearPreview(); $('#shBarWrap').hidden=false; $('#shGo').hidden=true; $('#shSave').hidden=true; $('#shCancel').textContent='取消';
   prog(0,'正在轉成每支手機都能播的檔案…'); open('#shareM');
   let r=shareCache.get(key);
   if(!r){
@@ -1194,18 +1205,21 @@ async function openShare(s){
   }
   shareFile=new File([r.blob],`${base}.${r.ext}`,{type:r.blob.type||'application/octet-stream'});
   prog(1); $('#shBarWrap').hidden=true;
+  if(r.kind!=='raw'){ prevUrl=URL.createObjectURL(r.blob);
+    $('#shMedia').innerHTML=r.kind==='video'?`<video controls playsinline preload="metadata" src="${prevUrl}"></video>`:`<audio controls preload="metadata" src="${prevUrl}"></audio>`;
+    $('#shPrev').hidden=false; }
   $('#shStatus').textContent=r.kind==='video'?'影片做好了！':r.kind==='audio'?'MP3 音檔做好了！':'這台裝置沒辦法轉檔';
   $('#shNote').textContent=r.kind==='video'?`已做成 MP4 影片（${(r.blob.size/1048576).toFixed(1)} MB），畫面是這張唱片。傳到 LINE 後，iPhone 和 Android 在聊天室裡都能直接播放。`
     :r.kind==='audio'?`已轉成 MP3（${(r.blob.size/1048576).toFixed(1)} MB），iPhone 和 Android 點開都能聽。`
     :'只能分享原始錄音檔，有些手機可能打不開。建議改用電腦的 Chrome 或手機的 Safari 再分享一次。';
   const canShare=!!(navigator.canShare&&(()=>{ try{ return navigator.canShare({files:[shareFile]}); }catch(e){ return false; } })());
-  $('#shLine').hidden=!(inLINE&&!canShare);
+  $('#shLine').hidden=!(inApp&&!canShare);
   $('#shGo').hidden=!canShare; $('#shSave').hidden=false; $('#shSave').textContent=canShare?'存到這台裝置':'下載檔案';
   $('#shCancel').textContent='關閉';
 }
-$('#shGo').addEventListener('click',async()=>{ if(!shareFile) return; try{ await navigator.share({files:[shareFile]}); close('#shareM'); }catch(e){ if(e.name!=='AbortError') toast('沒辦法開啟分享，請改按「存到這台裝置」'); } });
-$('#shSave').addEventListener('click',()=>{ if(shareFile){ dl(shareFile,shareFile.name); toast('已存檔'); } });
-$('#shCancel').addEventListener('click',()=>{ shareJob++; close('#shareM'); });
+$('#shGo').addEventListener('click',async()=>{ if(!shareFile) return; try{ $('#shMedia video,#shMedia audio')?.pause(); await navigator.share({files:[shareFile]}); clearPreview(); close('#shareM'); }catch(e){ if(e.name!=='AbortError') toast('沒辦法開啟分享，請改按「存到這台裝置」'); } });
+$('#shSave').addEventListener('click',()=>{ if(shareFile){ $('#shMedia video,#shMedia audio')?.pause(); dl(shareFile,shareFile.name); toast('已存檔'); } });
+$('#shCancel').addEventListener('click',()=>{ shareJob++; clearPreview(); close('#shareM'); });
 
 /* ---------- 故事書頁 ---------- */
 async function renderBook(){
@@ -1266,8 +1280,20 @@ $('#restoreFile').addEventListener('change',async e=>{
 });
 
 /* ---------- 在 LINE 內建瀏覽器裡：提示改用手機瀏覽器 ---------- */
-if(inLINE) $('#lineTip').hidden=false;
-document.addEventListener('click',e=>{ if(e.target.closest('[data-ext]')){ const u=new URL(location.href); u.searchParams.set('openExternalBrowser','1'); location.href=u.toString(); } });
+if(inApp){
+  $('#lineTip').hidden=false;
+  $('#appTipTitle').textContent=inApp==='App'?'你正在 App 內建的瀏覽器裡開啟':`你正在 ${inApp} 裡開啟`;
+  if(!inLINE){ /* 只有 LINE 能用網址直接跳出去，其他 App 要手動 */
+    const how=/iPhone|iPad|iPod/i.test(UA)?'點右上角（或右下角）的「⋯」，選「在 Safari 中開啟」':'點右上角的「⋮」，選「在 Chrome 中開啟」或「用瀏覽器開啟」';
+    $('#appTipText').innerHTML=`App 內建的瀏覽器常常沒辦法錄音、下載或分享檔案。請${how}，體驗最好。`;
+    $('#appTipBtn').textContent='複製網址'; $('#appTipBtn').removeAttribute('data-ext'); $('#appTipBtn').id='copyUrl';
+    $('#shLine').querySelector('[data-ext]').remove();
+  }
+}
+document.addEventListener('click',async e=>{
+  if(e.target.closest('[data-ext]')){ const u=new URL(location.href); u.searchParams.set('openExternalBrowser','1'); location.href=u.toString(); }
+  if(e.target.closest('#copyUrl')){ const u=location.origin+location.pathname; try{ await navigator.clipboard.writeText(u); toast('已複製網址，請貼到 Chrome 或 Safari'); }catch(err){ prompt('請複製這個網址，貼到 Chrome 或 Safari：',u); } }
+});
 
 /* ---------- 啟動 ---------- */
 window.addEventListener('beforeunload',e=>{ if(isRecording()||pending){ e.preventDefault(); e.returnValue=''; } });
