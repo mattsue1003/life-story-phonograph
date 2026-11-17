@@ -1161,6 +1161,38 @@ async function makeMP4(s,onProg){
   muxer.finalize();
   return new Blob([muxer.target.buffer],{type:'video/mp4'});
 }
+/* 備援做法：用瀏覽器內建的錄影功能，把唱片畫面＋聲音「播一遍」錄成 MP4。
+   花的時間跟錄音一樣長，但幾乎每支手機（iPhone Safari、Android Chrome）都做得到。 */
+function liveMP4Type(){
+  if(!window.MediaRecorder||!HTMLCanvasElement.prototype.captureStream) return '';
+  for(const t of ['video/mp4;codecs="avc1.42E01E,mp4a.40.2"','video/mp4;codecs=avc1,mp4a.40.2','video/mp4;codecs="avc1,mp4a"','video/mp4'])
+    try{ if(MediaRecorder.isTypeSupported(t)) return t; }catch(e){}
+  return '';
+}
+async function makeMP4Live(s,onProg,ctx){
+  const type=liveMP4Type(); if(!type) throw new Error('no-live-mp4');
+  ctx=ctx||new (window.AudioContext||window.webkitAudioContext)(); try{ await ctx.resume(); }catch(e){}
+  onProg(.02,'正在讀取錄音…');
+  const ab=await new Promise((res,rej)=>{ s.audio.arrayBuffer().then(b=>{ const p=ctx.decodeAudioData(b,res,rej); if(p&&p.then) p.then(res,rej); },rej); });
+  const cover=await drawCover(s,720), cv=document.createElement('canvas'); cv.width=cv.height=720; const cx=cv.getContext('2d');
+  let flip=0; const paint=()=>{ cx.drawImage(cover,0,0); cx.fillStyle=flip++%2?'#000':'#010101'; cx.fillRect(0,719,1,1); };
+  paint();
+  const vstream=cv.captureStream(2), dest=ctx.createMediaStreamDestination(), srcNode=ctx.createBufferSource();
+  srcNode.buffer=ab; srcNode.connect(dest);
+  const mr=new MediaRecorder(new MediaStream([...vstream.getVideoTracks(),...dest.stream.getAudioTracks()]),{mimeType:type,videoBitsPerSecond:350000,audioBitsPerSecond:96000});
+  const parts=[]; mr.ondataavailable=e=>{ if(e.data.size) parts.push(e.data); };
+  const done=new Promise((res,rej)=>{ mr.onstop=res; mr.onerror=e=>rej(e.error||new Error('rec')); });
+  let lk=null; try{ lk=await navigator.wakeLock?.request('screen'); }catch(e){}
+  const iv=setInterval(()=>{ paint(); const t=Math.max(0,ctx.currentTime-t0); const left=Math.max(0,ab.duration-t);
+    onProg(Math.min(.95,.05+.9*t/ab.duration),`正在錄成影片，還要約 ${left>=60?Math.ceil(left/60)+' 分鐘':Math.ceil(left)+' 秒'}，請不要關掉螢幕…`); },500);
+  mr.start(1000); const t0=ctx.currentTime+.15; srcNode.start(t0);
+  srcNode.onended=()=>setTimeout(()=>{ try{ mr.stop(); }catch(e){} },400);
+  liveAbort=()=>{ try{ srcNode.stop(); }catch(e){} try{ mr.stop(); }catch(e){} };
+  try{ await done; } finally { clearInterval(iv); liveAbort=null; vstream.getTracks().forEach(t=>t.stop()); try{ lk?.release(); }catch(e){} }
+  const blob=new Blob(parts,{type:'video/mp4'}); if(!blob.size) throw new Error('empty');
+  return blob;
+}
+let liveAbort=null;
 const peakOf=a=>{ let m=0; for(let i=0;i<a.length;i+=7){ const v=Math.abs(a[i]); if(v>m) m=v; } return m; };
 const rmsOf=a=>{ let t=0,n=0; for(let i=0;i<a.length;i+=5){ t+=a[i]*a[i]; n++; } return n?Math.sqrt(t/n):0; };
 function ascOf(rate,ch){ const idx=[96000,88200,64000,48000,44100,32000,24000,22050,16000,12000,11025,8000,7350].indexOf(rate);
@@ -1185,41 +1217,48 @@ async function makeMP3(s,onProg){
   return new Blob(parts,{type:'audio/mpeg'});
 }
 let shareJob=0, shareFile=null, prevUrl='';
+const canShareFile=f=>!!(f&&navigator.canShare&&(()=>{ try{ return navigator.canShare({files:[f]}); }catch(e){ return false; } })());
 function clearPreview(){ const m=$('#shMedia video,#shMedia audio'); if(m){ m.pause(); m.removeAttribute('src'); m.load(); } $('#shMedia').innerHTML=''; $('#shPrev').hidden=true; if(prevUrl){ URL.revokeObjectURL(prevUrl); prevUrl=''; } }
 async function openShare(s){
   const job=++shareJob, key=`${s.id}|${s.title}|${s.era||''}|${s.photo?.size||0}|${s.elder||elder.name}`;
   const base=`${s.elder||elder.name?(s.elder||elder.name)+'-':''}${s.title}`.replace(/[\\/:*?"<>|]/g,'').slice(0,60);
   const prog=(p,t)=>{ if(job!==shareJob) return; $('#shBar').style.width=Math.round(p*100)+'%'; if(t) $('#shStatus').textContent=t+` ${Math.round(p*100)}%`; };
   $('#shTitle').textContent=`分享「${s.title}」`; $('#shNote').textContent=''; $('#shLine').hidden=true; clearPreview(); $('#shBarWrap').hidden=false; $('#shGo').hidden=true; $('#shSave').hidden=true; $('#shCancel').textContent='取消';
-  prog(0,'正在轉成每支手機都能播的檔案…'); open('#shareM');
+  prog(0,'正在做成 MP4 影片…'); open('#shareM');
+  /* iPhone 規定聲音要在手指點擊當下啟動，所以先在這裡開好 */
+  let ctx=null; try{ ctx=new (window.AudioContext||window.webkitAudioContext)(); ctx.resume(); }catch(e){}
   let r=shareCache.get(key);
   if(!r){
-    try{ const b=await makeMP4(s,prog); if(job!==shareJob) return; prog(.97,'正在確認影片有聲音…');
-      if(!(await hasSound(b,s.audio))) throw new Error('mp4-silent'); r={blob:b,ext:'mp4',kind:'video'}; }
-    catch(e1){ console.warn('mp4',e1); if(job!==shareJob) return;
-      try{ const b=await makeMP3(s,prog); if(job!==shareJob) return; if(!(await hasSound(b,s.audio))) throw new Error('mp3-silent'); r={blob:b,ext:'mp3',kind:'audio'}; }
-      catch(e2){ console.warn('mp3',e2); if(job!==shareJob) return;
-        const ext=(s.type||'').includes('mp4')?'m4a':'webm'; r={blob:s.audio,ext,kind:'raw'}; } }
+    const ok=async b=>{ if(job!==shareJob) return false; prog(.97,'正在確認影片有聲音…'); return hasSound(b,s.audio); };
+    try{ const b=await makeMP4(s,prog); if(!(await ok(b))) throw new Error('mp4-silent'); r={blob:b,ext:'mp4',kind:'video'}; }
+    catch(e1){ console.warn('mp4 fast',e1); if(job!==shareJob){ ctx?.close(); return; }
+      try{ prog(0,'正在錄成 MP4 影片…'); const b=await makeMP4Live(s,prog,ctx); if(!(await ok(b))) throw new Error('live-silent'); r={blob:b,ext:'mp4',kind:'video'}; }
+      catch(e2){ console.warn('mp4 live',e2); if(job!==shareJob){ ctx?.close(); return; }
+        try{ const b=await makeMP3(s,prog); if(!(await ok(b))) throw new Error('mp3-silent'); r={blob:b,ext:'mp3',kind:'audio'}; }
+        catch(e3){ console.warn('mp3',e3); if(job!==shareJob){ ctx?.close(); return; }
+          const ext=(s.type||'').includes('mp4')?'m4a':'webm'; r={blob:s.audio,ext,kind:'raw'}; } } }
+    try{ ctx?.close(); }catch(e){}
     if(job!==shareJob) return;
     if(r.kind!=='raw') shareCache.set(key,r);
-  }
+  } else { try{ ctx?.close(); }catch(e){} }
   shareFile=new File([r.blob],`${base}.${r.ext}`,{type:r.blob.type||'application/octet-stream'});
   prog(1); $('#shBarWrap').hidden=true;
   if(r.kind!=='raw'){ prevUrl=URL.createObjectURL(r.blob);
     $('#shMedia').innerHTML=r.kind==='video'?`<video controls playsinline preload="metadata" src="${prevUrl}"></video>`:`<audio controls preload="metadata" src="${prevUrl}"></audio>`;
     $('#shPrev').hidden=false; }
-  $('#shStatus').textContent=r.kind==='video'?'影片做好了！':r.kind==='audio'?'MP3 音檔做好了！':'這台裝置沒辦法轉檔';
-  $('#shNote').textContent=r.kind==='video'?`已做成 MP4 影片（${(r.blob.size/1048576).toFixed(1)} MB），畫面是這張唱片。傳到 LINE 後，iPhone 和 Android 在聊天室裡都能直接播放。`
-    :r.kind==='audio'?`已轉成 MP3（${(r.blob.size/1048576).toFixed(1)} MB），iPhone 和 Android 點開都能聽。`
-    :'只能分享原始錄音檔，有些手機可能打不開。建議改用電腦的 Chrome 或手機的 Safari 再分享一次。';
-  const canShare=!!(navigator.canShare&&(()=>{ try{ return navigator.canShare({files:[shareFile]}); }catch(e){ return false; } })());
+  const isIOS=/iPhone|iPad|iPod/i.test(UA)||(navigator.maxTouchPoints>1&&/Mac/.test(navigator.platform||''));
+  $('#shStatus').textContent=r.kind==='video'?'MP4 影片做好了！':r.kind==='audio'?'這支手機做不了影片，先給你 MP3 音檔':'這台裝置沒辦法轉檔';
+  $('#shNote').textContent=r.kind==='video'?`MP4 影片（${(r.blob.size/1048576).toFixed(1)} MB），畫面是這張唱片。下載或分享的都是這個 MP4，傳到 LINE 後 iPhone 和 Android 都能直接播放。`+(isIOS&&canShareFile(shareFile)?'想存進「照片」：按「分享到 LINE 等 App」，再選「儲存影片」。':'')
+    :r.kind==='audio'?`這支手機的瀏覽器沒辦法做 MP4 影片，所以改成 MP3（${(r.blob.size/1048576).toFixed(1)} MB），一樣每支手機都能聽。想要影片，請用最新版的 Chrome 或 Safari 再分享一次。`
+    :'只能分享原始錄音檔，有些手機可能打不開。請改用最新版的 Chrome 或 Safari 再分享一次。';
+  const canShare=canShareFile(shareFile);
   $('#shLine').hidden=!(inApp&&!canShare);
-  $('#shGo').hidden=!canShare; $('#shSave').hidden=false; $('#shSave').textContent=canShare?'存到這台裝置':'下載檔案';
+  $('#shGo').hidden=!canShare; $('#shSave').hidden=false; $('#shSave').textContent=r.ext==='mp4'?'下載 MP4':canShare?'存到這台裝置':'下載檔案';
   $('#shCancel').textContent='關閉';
 }
 $('#shGo').addEventListener('click',async()=>{ if(!shareFile) return; try{ $('#shMedia video,#shMedia audio')?.pause(); await navigator.share({files:[shareFile]}); clearPreview(); close('#shareM'); }catch(e){ if(e.name!=='AbortError') toast('沒辦法開啟分享，請改按「存到這台裝置」'); } });
 $('#shSave').addEventListener('click',()=>{ if(shareFile){ $('#shMedia video,#shMedia audio')?.pause(); dl(shareFile,shareFile.name); toast('已存檔'); } });
-$('#shCancel').addEventListener('click',()=>{ shareJob++; clearPreview(); close('#shareM'); });
+$('#shCancel').addEventListener('click',()=>{ shareJob++; liveAbort?.(); clearPreview(); close('#shareM'); });
 
 /* ---------- 故事書頁 ---------- */
 async function renderBook(){
