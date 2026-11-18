@@ -524,7 +524,7 @@ body.recording [data-oth-report],body.modal-open [data-oth-report]{display:none!
         <input class="t" id="sEra" placeholder="例如：民國 50 年、十幾歲時">
         <label class="f" for="sText">重點紀錄</label>
         <textarea class="t" id="sText" placeholder="記下人名、地名、長輩特別強調的話……"></textarea>
-        <label class="f" for="sPhoto">配一張老照片，會印在唱片中間</label>
+        <label class="f" for="sPhoto">配一張老照片，會放進唱片和分享的影片裡</label>
         <label class="filebtn"><input class="vh" type="file" id="sPhoto" accept="image/*"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 17l-5-5-8 7"/></svg>選一張照片</label>
         <img id="sPhotoPrev" class="photo-prev" alt="" hidden>
         <div class="save-actions">
@@ -918,7 +918,7 @@ function openSave(p,text,hist){
   pending=p;
   $('#savePlayer').src=URL.createObjectURL(p.audio);
   $('#saveDisc').innerHTML=''; $('#saveDisc').setAttribute('style',`--lab:${catOf(p.cat).color}`);
-  $('#sTitle').value=p.q.replace(/[？?]$/,''); $('#sEra').value=''; $('#sText').value=text; $('#sPhoto').value=''; $('#sPhotoPrev').hidden=true;
+  $('#sTitle').value=p.q.replace(/[？?]$/,''); $('#sEra').value=''; $('#sText').value=text; $('#sPhoto').value=''; $('#sPhotoPrev').hidden=true; photoTask=null;
   go('save',hist);
 }
 function onStopped(){
@@ -951,17 +951,20 @@ function stopSTT(){ sttWant=false; try{rec&&rec.stop()}catch(e){} }
 /* ---------- 保存 ---------- */
 function shrinkImg(file,max){ return new Promise(res=>{ const img=new Image(); img.onload=()=>{
   const k=Math.min(1,max/Math.max(img.width,img.height)); const c=document.createElement('canvas'); c.width=img.width*k; c.height=img.height*k;
-  c.getContext('2d').drawImage(img,0,0,c.width,c.height); c.toBlob(b=>res(b||file),'image/jpeg',.82); URL.revokeObjectURL(img.src); };
+  c.getContext('2d').drawImage(img,0,0,c.width,c.height); c.toBlob(b=>res(b||file),'image/jpeg',.88); URL.revokeObjectURL(img.src); };
   img.onerror=()=>res(file); img.src=URL.createObjectURL(file); }); }
-$('#sPhoto').addEventListener('change',async e=>{
-  const f=e.target.files[0]; if(!f||!pending) return;
-  pending.photo=await shrinkImg(f,1000); const u=URL.createObjectURL(pending.photo);
-  $('#sPhotoPrev').src=u; $('#sPhotoPrev').hidden=false;
-  $('#saveDisc').innerHTML=`<i style="background-image:url(${u})"></i>`;
+let photoTask=null;
+$('#sPhoto').addEventListener('change',e=>{
+  const f=e.target.files[0], p=pending; if(!f||!p) return;
+  $('#saveBtn').textContent='照片處理中…';
+  photoTask=shrinkImg(f,1600).then(b=>{ p.photo=b; const u=URL.createObjectURL(b);
+    $('#sPhotoPrev').src=u; $('#sPhotoPrev').hidden=false; $('#saveDisc').innerHTML=`<i style="background-image:url(${u})"></i>`;
+  }).finally(()=>{ $('#saveBtn').textContent='收進唱片櫃'; });
 });
 let saving=false, nextUp=null;
 $('#saveBtn').addEventListener('click',async()=>{
   if(!pending||saving) return;
+  if(photoTask){ saving=true; try{ await photoTask; }catch(e){} photoTask=null; saving=false; }
   if(!$('#sTitle').value.trim()){ $('#sTitle').value=pending.q.replace(/[？?]$/,''); }
   saving=true;
   Object.assign(pending,{title:$('#sTitle').value.trim(),era:$('#sEra').value.trim(),text:$('#sText').value.trim(),elder:elder.name});
@@ -1064,7 +1067,7 @@ $('#shelfMain').addEventListener('click',async e=>{
   } else if(a==='del'){
     if(confirm(`確定刪除「${s.title}」嗎？刪除後無法復原。`)){ if(playingId===s.id){player.pause();playingId=null;} await delStory(s.id); selId=(list[i+1]||list[i-1])?.id||null; renderShelf(); toast('已刪除'); }
   } else if(a==='edit'){
-    editing=s; editPhoto=undefined; $('#eTitle').value=s.title; $('#eEra').value=s.era||''; $('#eText').value=s.text||''; $('#ePhoto').value='';
+    editing=s; editPhoto=undefined; ePhotoTask=null; $('#eTitle').value=s.title; $('#eEra').value=s.era||''; $('#eText').value=s.text||''; $('#ePhoto').value='';
     showEditPhoto(s.photo); open('#editM');
   }
 });
@@ -1077,9 +1080,10 @@ document.addEventListener('keydown',e=>{
 $('#eCancel').addEventListener('click',()=>close('#editM'));
 let editPhoto, ePrevUrl='';
 function showEditPhoto(b){ if(ePrevUrl) URL.revokeObjectURL(ePrevUrl); ePrevUrl=b?URL.createObjectURL(b):''; $('#ePhotoPrev').src=ePrevUrl; $('#ePhotoPrev').hidden=!b; $('#ePhotoDel').hidden=!b; }
-$('#ePhoto').addEventListener('change',async e=>{ const f=e.target.files[0]; if(!f) return; editPhoto=await shrinkImg(f,1000); showEditPhoto(editPhoto); });
+let ePhotoTask=null;
+$('#ePhoto').addEventListener('change',e=>{ const f=e.target.files[0]; if(!f) return; ePhotoTask=shrinkImg(f,1600).then(b=>{ editPhoto=b; showEditPhoto(b); }); });
 $('#ePhotoDel').addEventListener('click',()=>{ editPhoto=null; $('#ePhoto').value=''; showEditPhoto(null); });
-$('#eSave').addEventListener('click',async()=>{ if(editPhoto!==undefined) editing.photo=editPhoto; Object.assign(editing,{title:$('#eTitle').value.trim()||editing.title,era:$('#eEra').value.trim(),text:$('#eText').value.trim()});
+$('#eSave').addEventListener('click',async()=>{ if(ePhotoTask){ try{ await ePhotoTask; }catch(e){} ePhotoTask=null; } if(editPhoto!==undefined) editing.photo=editPhoto; Object.assign(editing,{title:$('#eTitle').value.trim()||editing.title,era:$('#eEra').value.trim(),text:$('#eText').value.trim()});
   await putStory(editing); close('#editM'); renderShelf(); toast('已儲存'); });
 function dl(blob,name){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name.replace(/[\\/:*?"<>|]/g,''); document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000); }
 
@@ -1097,10 +1101,69 @@ async function decodeMono(blob,rate){
   const out=new Float32Array(ab.length); for(let c=0;c<ab.numberOfChannels;c++){ const d=ab.getChannelData(c); for(let i=0;i<d.length;i++) out[i]+=d[i]/ab.numberOfChannels; } return out;
 }
 const loadImg=blob=>new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=URL.createObjectURL(blob); });
-async function drawCover(s,W=720){
-  try{ await Promise.all([document.fonts.load('700 40px "Noto Serif TC"'),document.fonts.load('500 20px Cinzel')]); }catch(e){}
-  const c=document.createElement('canvas'); c.width=c.height=W; const x=c.getContext('2d'), cat=catOf(s.cat), k=W/720;
+/* 影片畫面（1080×1080）：有老照片時以照片為主角，沒有照片時是金色唱片 */
+function wrapLines(x,text,maxW,maxLines){
+  const lines=[]; let line='';
+  for(const ch of text){ if(x.measureText(line+ch).width>maxW&&line){ lines.push(line); line=ch; } else line+=ch; }
+  if(line) lines.push(line);
+  /* 兩行時平均分配，優先在標點後斷行，避免第二行只剩一兩個字 */
+  if(lines.length===2&&maxLines>=2){ const t=[...text], n=t.length; let best=-1, bestScore=1e9;
+    for(let i=Math.ceil(n*.3);i<=Math.floor(n*.7);i++){ const a2=t.slice(0,i).join(''), b2=t.slice(i).join('');
+      if(x.measureText(a2).width>maxW||x.measureText(b2).width>maxW) continue;
+      const score=Math.abs(a2.length-b2.length)-(/[？，、。！：；]/.test(t[i-1])?6:0); if(score<bestScore){ bestScore=score; best=i; } }
+    if(best>0) return [t.slice(0,best).join(''),t.slice(best).join('')]; }
+  if(lines.length>maxLines){ lines.length=maxLines; let l=lines[maxLines-1]; while(l&&x.measureText(l+'…').width>maxW) l=l.slice(0,-1); lines[maxLines-1]=l+'…'; }
+  return lines;
+}
+async function drawCover(s,W=1080){
+  try{ await Promise.all([document.fonts.load('700 52px "Noto Serif TC"'),document.fonts.load('500 30px "Noto Serif TC"'),document.fonts.load('500 24px Cinzel')]); }catch(e){}
+  const c=document.createElement('canvas'); c.width=c.height=W; const x=c.getContext('2d'), cat=catOf(s.cat);
+  x.imageSmoothingEnabled=true; x.imageSmoothingQuality='high';
+  const who=s.elder||elder.name, sub=[who?`${who}的故事`:'',cat.name,s.era].filter(Boolean).join('　·　'), title=s.title||s.q;
+  let im=null; if(s.photo){ try{ im=await loadImg(s.photo); }catch(e){ im=null; } }
   x.fillStyle='#000'; x.fillRect(0,0,W,W);
+
+  if(im){
+    const k=W/1080;
+    /* 背景：同一張照片放大、模糊、壓暗（先縮到很小再放大＝每支手機都支援的模糊） */
+    const t=document.createElement('canvas'); t.width=48; t.height=48; const tx=t.getContext('2d');
+    const sc0=Math.max(48/im.width,48/im.height); tx.drawImage(im,(48-im.width*sc0)/2,(48-im.height*sc0)/2,im.width*sc0,im.height*sc0);
+    x.drawImage(t,-W*.08,-W*.08,W*1.16,W*1.16);
+    x.fillStyle='rgba(0,0,0,.55)'; x.fillRect(0,0,W,W);
+    let g=x.createLinearGradient(0,W*.62,0,W); g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1,'rgba(0,0,0,.92)'); x.fillStyle=g; x.fillRect(0,0,W,W);
+    g=x.createLinearGradient(0,0,0,W*.16); g.addColorStop(0,'rgba(0,0,0,.6)'); g.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle=g; x.fillRect(0,0,W,W*.16);
+    /* 品牌 */
+    x.textAlign='center'; x.fillStyle='#E4CB86'; x.font=`500 ${24*k}px Cinzel,serif`; x.fillText('PHONOGRAPH  OF  TIME',W/2,64*k);
+    /* 照片本體：完整顯示、不裁切，像一張沖洗出來的老照片 */
+    const boxW=880*k, boxH=630*k, top=104*k, mat=16*k;
+    const sc=Math.min((boxW-2*mat)/im.width,(boxH-2*mat)/im.height);
+    const pw=im.width*sc, ph=im.height*sc, px=(W-pw)/2, py=top+(boxH-ph)/2;
+    x.save(); x.shadowColor='rgba(0,0,0,.65)'; x.shadowBlur=40*k; x.shadowOffsetY=14*k;
+    x.fillStyle='#F4EEE2'; x.fillRect(px-mat,py-mat,pw+2*mat,ph+2*mat); x.restore();
+    x.drawImage(im,px,py,pw,ph);
+    x.strokeStyle='rgba(0,0,0,.18)'; x.lineWidth=1; x.strokeRect(px+.5,py+.5,pw-1,ph-1);
+    /* 角落的小唱片 */
+    const vr=62*k, vx=px+pw+mat-vr*.55, vy=py+ph+mat-vr*.55;
+    x.save(); x.shadowColor='rgba(0,0,0,.6)'; x.shadowBlur=18*k;
+    x.beginPath(); x.arc(vx,vy,vr+4*k,0,7); x.fillStyle='#E4CB86'; x.fill(); x.restore();
+    x.beginPath(); x.arc(vx,vy,vr,0,7); x.fillStyle='#16120e'; x.fill();
+    x.strokeStyle='rgba(255,255,255,.08)'; x.lineWidth=1.2*k; for(let r=vr-8*k;r>vr*.42;r-=7*k){ x.beginPath(); x.arc(vx,vy,r,0,7); x.stroke(); }
+    x.beginPath(); x.arc(vx,vy,vr*.36,0,7); x.fillStyle=cat.color; x.fill();
+    x.beginPath(); x.arc(vx,vy,4*k,0,7); x.fillStyle='#000'; x.fill();
+    /* 標題與副標 */
+    x.fillStyle='#F7F1E6'; x.font=`700 ${54*k}px "Noto Serif TC",serif`;
+    const lines=wrapLines(x,title,W-150*k,2), base=lines.length>1?862:892;
+    x.shadowColor='rgba(0,0,0,.6)'; x.shadowBlur=12*k;
+    lines.forEach((l,i)=>x.fillText(l,W/2,base*k+i*66*k));
+    x.font=`500 ${30*k}px "Noto Serif TC",serif`; x.fillStyle='#E4CB86'; x.fillText(sub,W/2,(base+(lines.length>1?66:0)+74)*k);
+    x.shadowBlur=0;
+    x.strokeStyle='rgba(228,203,134,.45)'; x.lineWidth=2*k; x.strokeRect(26*k,26*k,W-52*k,W-52*k);
+    URL.revokeObjectURL(im.src);
+    return c;
+  }
+
+  /* 沒有照片：金色唱片 */
+  const k=W/720;
   const g=x.createRadialGradient(W/2,300*k,10,W/2,300*k,420*k); g.addColorStop(0,'rgba(228,203,134,.22)'); g.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle=g; x.fillRect(0,0,W,W);
   x.strokeStyle='rgba(228,203,134,.45)'; x.lineWidth=2*k; x.strokeRect(22*k,22*k,W-44*k,W-44*k);
   x.textAlign='center'; x.fillStyle='#B89A55'; x.font=`500 ${20*k}px Cinzel,serif`; x.fillText('PHONOGRAPH  OF  TIME',W/2,70*k);
@@ -1108,22 +1171,20 @@ async function drawCover(s,W=720){
   x.beginPath(); x.arc(cx,cy,R+6*k,0,7); x.fillStyle='#E4CB86'; x.fill();
   x.beginPath(); x.arc(cx,cy,R,0,7); x.fillStyle='#16120e'; x.fill();
   x.strokeStyle='rgba(255,255,255,.07)'; x.lineWidth=1.5*k; for(let r=R-14*k;r>R*0.36;r-=12*k){ x.beginPath(); x.arc(cx,cy,r,0,7); x.stroke(); }
-  const L=R*0.34; x.save(); x.beginPath(); x.arc(cx,cy,L,0,7); x.clip();
-  if(s.photo){ try{ const im=await loadImg(s.photo); const sc=Math.max(2*L/im.width,2*L/im.height); x.drawImage(im,cx-im.width*sc/2,cy-im.height*sc/2,im.width*sc,im.height*sc); URL.revokeObjectURL(im.src);}catch(e){ x.fillStyle=cat.color; x.fill(); } }
-  else { x.fillStyle=cat.color; x.fillRect(cx-L,cy-L,2*L,2*L); }
-  x.restore(); x.beginPath(); x.arc(cx,cy,7*k,0,7); x.fillStyle='#000'; x.fill();
-  const title=s.title||s.q, lines=[]; x.font=`700 ${40*k}px "Noto Serif TC",serif`; let line='';
-  for(const ch of title){ if(x.measureText(line+ch).width>W-120*k){ lines.push(line); line=ch; } else line+=ch; } if(line) lines.push(line);
-  if(lines.length>2){ lines.length=2; lines[1]=lines[1].slice(0,-1)+'…'; }
+  x.beginPath(); x.arc(cx,cy,R*0.34,0,7); x.fillStyle=cat.color; x.fill();
+  x.beginPath(); x.arc(cx,cy,7*k,0,7); x.fillStyle='#000'; x.fill();
+  x.font=`700 ${40*k}px "Noto Serif TC",serif`; const lines=wrapLines(x,title,W-120*k,2);
   x.fillStyle='#F4EEE2'; lines.forEach((l,i)=>x.fillText(l,W/2,(lines.length>1?548:568)*k+i*52*k));
-  x.font=`500 ${24*k}px "Noto Serif TC",serif`; x.fillStyle='#E4CB86';
-  x.fillText([(s.elder||elder.name)?`${s.elder||elder.name}的故事`:'',cat.name,s.era].filter(Boolean).join('　·　'),W/2,650*k);
+  x.font=`500 ${24*k}px "Noto Serif TC",serif`; x.fillStyle='#E4CB86'; x.fillText(sub,W/2,650*k);
   return c;
 }
 async function makeMP4(s,onProg){
   if(!window.VideoEncoder||!window.AudioEncoder||!window.VideoFrame||!window.AudioData) throw new Error('no-webcodecs');
-  const W=720, vcfg={codec:'avc1.42001f',width:W,height:W,bitrate:350000,framerate:1};
-  if(!(await VideoEncoder.isConfigSupported(vcfg)).supported) throw new Error('no-h264');
+  let W=0, vcfg=null;
+  for(const [w,codec,br] of [[1080,'avc1.420028',2500000],[1080,'avc1.42002a',2500000],[720,'avc1.42001f',1500000]]){
+    const cfg={codec,width:w,height:w,bitrate:br,framerate:1};
+    try{ if((await VideoEncoder.isConfigSupported(cfg)).supported){ W=w; vcfg=cfg; break; } }catch(e){} }
+  if(!vcfg) throw new Error('no-h264');
   let acfg=null;
   for(const r of [48000,44100]){ const cfg={codec:'mp4a.40.2',sampleRate:r,numberOfChannels:1,bitrate:64000}; try{ if((await AudioEncoder.isConfigSupported(cfg)).supported){ acfg=cfg; break; } }catch(e){} }
   if(!acfg) throw new Error('no-aac');
@@ -1146,7 +1207,7 @@ async function makeMP4(s,onProg){
   let done=0;
   for(let i=0;i<frames;i++){
     if(err) throw err;
-    const f=new VideoFrame(cover,{timestamp:i*1e6,duration:Math.max(1e5,Math.round(Math.min(1,dur-i)*1e6))}); venc.encode(f,{keyFrame:i%10===0}); f.close();
+    const f=new VideoFrame(cover,{timestamp:i*1e6,duration:Math.max(1e5,Math.round(Math.min(1,dur-i)*1e6))}); venc.encode(f,{keyFrame:i%30===0}); f.close();
     while(venc.encodeQueueSize>8) await tick0();
     if(++done%20===0){ onProg(.05+.9*done/total,'正在做成影片…'); await tick0(); }
   }
@@ -1174,12 +1235,12 @@ async function makeMP4Live(s,onProg,ctx){
   ctx=ctx||new (window.AudioContext||window.webkitAudioContext)(); try{ await ctx.resume(); }catch(e){}
   onProg(.02,'正在讀取錄音…');
   const ab=await new Promise((res,rej)=>{ s.audio.arrayBuffer().then(b=>{ const p=ctx.decodeAudioData(b,res,rej); if(p&&p.then) p.then(res,rej); },rej); });
-  const cover=await drawCover(s,720), cv=document.createElement('canvas'); cv.width=cv.height=720; const cx=cv.getContext('2d');
-  let flip=0; const paint=()=>{ cx.drawImage(cover,0,0); cx.fillStyle=flip++%2?'#000':'#010101'; cx.fillRect(0,719,1,1); };
+  const cover=await drawCover(s,1080), cv=document.createElement('canvas'); cv.width=cv.height=1080; const cx=cv.getContext('2d');
+  let flip=0; const paint=()=>{ cx.drawImage(cover,0,0); cx.fillStyle=flip++%2?'#000':'#010101'; cx.fillRect(0,1079,1,1); };
   paint();
   const vstream=cv.captureStream(2), dest=ctx.createMediaStreamDestination(), srcNode=ctx.createBufferSource();
   srcNode.buffer=ab; srcNode.connect(dest);
-  const mr=new MediaRecorder(new MediaStream([...vstream.getVideoTracks(),...dest.stream.getAudioTracks()]),{mimeType:type,videoBitsPerSecond:350000,audioBitsPerSecond:96000});
+  const mr=new MediaRecorder(new MediaStream([...vstream.getVideoTracks(),...dest.stream.getAudioTracks()]),{mimeType:type,videoBitsPerSecond:1500000,audioBitsPerSecond:96000});
   const parts=[]; mr.ondataavailable=e=>{ if(e.data.size) parts.push(e.data); };
   const done=new Promise((res,rej)=>{ mr.onstop=res; mr.onerror=e=>rej(e.error||new Error('rec')); });
   let lk=null; try{ lk=await navigator.wakeLock?.request('screen'); }catch(e){}
