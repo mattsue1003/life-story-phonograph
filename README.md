@@ -12,7 +12,8 @@
 
 ## 分享格式
 分享時會在手機上轉檔，讓 iPhone、Android 和 LINE 都能播：
-- 優先做成 MP4 影片（H.264＋AAC，畫面是唱片封面），LINE 聊天室裡可直接播放
+- 優先做成 MP4 影片（H.264＋AAC，1080×1080）：照片為主角、多張照片輪流淡入淡出，下方有旋轉唱片、跟著聲音跳動的音量條和播放進度；LINE 聊天室裡可直接播放
+- 快速做法（WebCodecs）不行時，改用瀏覽器內建錄影即時錄成 MP4
 - 瀏覽器不支援 WebCodecs 時改成 MP3
 
 第三方程式庫放在 `vendor/`：[mp4-muxer](https://github.com/Vanilagy/mp4-muxer)（MIT）、[lamejs](https://github.com/zhuker/lamejs)（LGPL-3.0，未修改）。

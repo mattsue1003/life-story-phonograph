@@ -1,5 +1,5 @@
 /* 時光留聲機：離線也能開。頁面本身「先連網、連不上才用存檔」，所以更新會自動生效。 */
-const CACHE='phono-v3';
+const CACHE='phono-v4';
 const SHELL=['./','manifest.webmanifest','vendor/mp4-muxer.js','vendor/lame.min.js','icon-192.png','icon-512.png','apple-touch-icon.png'];
 self.addEventListener('install',e=>{ e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting())); });
 self.addEventListener('activate',e=>{ e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())); });
