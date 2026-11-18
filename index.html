@@ -880,7 +880,7 @@ async function beginRec(){
   mr.onstop=onStopped;
   mr.start(1000); t0=performance.now();
   try{ actx=new (window.AudioContext||window.webkitAudioContext)(); analyser=actx.createAnalyser(); analyser.fftSize=512;
-    actx.createMediaStreamSource(stream).connect(analyser); actx.resume?.().catch(()=>{}); }catch(e){}
+    const msrc=actx.createMediaStreamSource(stream); msrc.connect(analyser); startPCM(actx,msrc); actx.resume?.().catch(()=>{}); }catch(e){}
   const buf=new Uint8Array(512);
   tick=setInterval(()=>{ const el=elapsed(); $('#timer').textContent=fmt(el);
     if(el-lastCkpt>=CKPT_SEC){ lastCkpt=el; saveDraft(); }
@@ -927,6 +927,21 @@ function openSave(p,text,hist){
   $('#sTitle').value=p.q.replace(/[？?]$/,''); $('#sEra').value=''; $('#sText').value=text; $('#sPhoto').value=''; photoTask=null; sGrid.set([]);
   go('save',hist);
 }
+/* 錄音時同時存一份 16kHz 原始聲音：之後做影片不用再「讀回」錄音檔（Safari 常讀不回自己錄的檔） */
+let pcmParts=[], pcmLen=0, pcmProc=null;
+function startPCM(ac,node){
+  pcmParts=[]; pcmLen=0;
+  try{ const proc=ac.createScriptProcessor(4096,1,1), ratio=ac.sampleRate/16000; let pos=0;
+    proc.onaudioprocess=e=>{ if(!mr||mr.state!=='recording') return; const inp=e.inputBuffer.getChannelData(0), out=[];
+      while(pos<inp.length){ const a=Math.floor(pos), b=Math.min(inp.length,Math.max(a+1,Math.floor(pos+ratio))); let t=0; for(let j=a;j<b;j++) t+=inp[j]; out.push(t/(b-a)); pos+=ratio; }
+      pos-=inp.length; const i16=new Int16Array(out.length); for(let i=0;i<out.length;i++){ const v=Math.max(-1,Math.min(1,out[i])); i16[i]=v<0?v*0x8000:v*0x7FFF; }
+      pcmParts.push(i16); pcmLen+=i16.length; };
+    node.connect(proc); proc.connect(ac.destination); pcmProc=proc;
+  }catch(e){ pcmProc=null; }
+}
+function takePCM(sec){ try{ pcmProc?.disconnect(); }catch(e){} pcmProc=null;
+  const want=sec*16000; if(!pcmLen||pcmLen<want*.9||pcmLen>want*1.1) return null;  /* 中途被系統暫停（例如鎖螢幕）就不用，改讀錄音檔 */
+  return new Blob(pcmParts,{type:'application/octet-stream'}); }
 function onStopped(){
   close('#restM');
   clearInterval(tick); stopSTT(); stream?.getTracks().forEach(t=>t.stop()); actx?.close().catch(()=>{}); analyser=null;
@@ -934,10 +949,10 @@ function onStopped(){
   document.body.classList.remove('recording','paused','spinning');
   const type=mr.mimeType||chunks[0]?.type||'audio/webm';
   const blob=new Blob(chunks,{type}); mr=null;
-  if(acc<2||!blob.size){ toast('錄音太短，再試一次'); clearDraft(); resetRecUI(); return; }
+  if(acc<2||!blob.size){ toast('錄音太短，再試一次'); takePCM(0); clearDraft(); resetRecUI(); return; }
   setMeta('draft',{id:draftId,cat:cur.cat,q:cur.q,audio:blob,type,duration:acc,created:Date.now(),text:finalText}).catch(()=>{});
   const text=(finalText.trim()?finalText.trim()+'\n':'')+(marks.length?'追問：'+marks.map(m=>`${fmt(m.t)} ${m.f}`).join('、'):'');
-  openSave({id:draftId||'s'+Date.now(),cat:cur.cat,q:cur.q,audio:blob,type,duration:acc,created:Date.now(),photo:null},text,'replace');
+  openSave({id:draftId||'s'+Date.now(),cat:cur.cat,q:cur.q,audio:blob,type,duration:acc,created:Date.now(),photo:null,pcm16:takePCM(acc)},text,'replace');
   if(interrupted) toast('錄音被中斷了，前面錄的都有保留');
 }
 
@@ -1193,17 +1208,20 @@ async function buildScene(s,W,pcm,rate){
     x.restore();
     x.beginPath(); x.arc(cx,cy,Math.max(3,R*.035),0,7); x.fillStyle='#000'; x.fill();
   }
-  /* 音量（每一格的音量條） */
-  const N=36, hist=new Float32Array(N);
+  /* 音量條：跟著說話音量起伏的平緩波浪（不閃爍） */
+  const N=36; let env=0, envInit=false;
   let ref=0.05; if(pcm&&pcm.length){ const win=Math.round(rate*.05), vals=[]; for(let i=0;i+win<pcm.length;i+=win*7){ let t=0; for(let j=0;j<win;j+=4) t+=pcm[i+j]*pcm[i+j]; vals.push(Math.sqrt(t/(win/4))); }
-    vals.sort((a,b)=>a-b); ref=Math.max(.01,vals[Math.floor(vals.length*.95)]||.05); }
+    vals.sort((a,b)=>a-b); ref=Math.max(.01,vals[Math.floor(vals.length*.92)]||.05); }
+  const loud=t=>{ if(!pcm) return 0; const c=Math.floor(t*rate), h=Math.round(rate*.15); let s2=0,n=0;
+    for(let j=Math.max(0,c-h);j<Math.min(pcm.length,c+h);j+=6){ s2+=pcm[j]*pcm[j]; n++; } return n?Math.min(1,Math.sqrt(s2/n)/ref):0; };
   function bars(t,dt){
-    const out=new Float32Array(N); if(!pcm) return out;
-    const c=Math.floor(t*rate), span=Math.round(rate*.12), seg=Math.max(4,Math.floor(span/N)), start=c-Math.floor(span/2);
-    for(let i=0;i<N;i++){ let sum=0,n=0; const a0=start+i*seg; for(let j=0;j<seg;j+=2){ const v=pcm[a0+j]; if(v!==undefined){ sum+=v*v; n++; } }
-      const rms=n?Math.sqrt(sum/n):0, w=.5+.5*Math.sin(Math.PI*(i+.5)/N);
-      const target=Math.min(1,Math.pow(rms/ref,.75))*w;
-      const prev=hist[i]; hist[i]=target>prev?prev+(target-prev)*.7:prev+(target-prev)*Math.min(1,dt*6); out[i]=hist[i]; }
+    const target=loud(t);
+    if(!envInit){ env=target; envInit=true; }
+    const tau=target>env?.18:.45; env+=(target-env)*(1-Math.exp(-dt/tau));      /* 慢慢升、慢慢降 */
+    const out=new Float32Array(N), e=.18+.82*Math.pow(env,.8);
+    for(let i=0;i<N;i++){ const bell=.35+.65*Math.sin(Math.PI*(i+.5)/N);
+      const wave=.78+.22*Math.sin(t*2*Math.PI*.35+i*.42)*Math.sin(t*2*Math.PI*.13+i*.17);
+      out[i]=Math.min(1,e*bell*wave); }
     return out;
   }
   const total=s.duration||(pcm?pcm.length/rate:0);
@@ -1212,12 +1230,12 @@ async function buildScene(s,W,pcm,rate){
     const dt=Math.max(.001,t-lastT); lastT=t;
     /* 底圖：多張照片輪流，每張至少 8 秒，交替時淡入淡出 1.2 秒 */
     if(bases.length>1){
-      const segLen=Math.max(8,Math.min(20,total/bases.length||8)), fade=1.2;
+      const segLen=Math.max(9,Math.min(20,total/bases.length||9)), fade=2;
       const idx=Math.floor(t/segLen), within=t-idx*segLen, cur=bases[idx%bases.length], nxt=bases[(idx+1)%bases.length];
       x.globalAlpha=1; x.drawImage(cur,0,0);
-      if(within>segLen-fade&&t+fade<total){ x.globalAlpha=(within-(segLen-fade))/fade; x.drawImage(nxt,0,0); x.globalAlpha=1; }
+      if(within>segLen-fade&&t+fade<total){ const u=(within-(segLen-fade))/fade; x.globalAlpha=u*u*(3-2*u); x.drawImage(nxt,0,0); x.globalAlpha=1; }
     } else x.drawImage(bases[0],0,0);
-    const ang=t*2*Math.PI*.55;
+    const ang=t*2*Math.PI*.16;
     if(!hasPhoto) vinyl(x,L.bigX*k,L.bigY*k,L.bigR*k,ang);
     else vinyl(x,L.discX*k,L.barY*k,L.discR*k,ang);
     /* 音量條 */
@@ -1239,18 +1257,18 @@ async function buildScene(s,W,pcm,rate){
 }
 /* 舊名稱留著：靜態封面（第 0 秒的畫面） */
 async function drawCover(s,W=1080){ const [c,x]=mkCanvas(W); const sc=await buildScene(s,W,null,16000); sc.draw(x,0); return c; }
-async function makeMP4(s,onProg){
+async function makeMP4(s,onProg,cap){
   if(!window.VideoEncoder||!window.AudioEncoder||!window.VideoFrame||!window.AudioData) throw new Error('no-webcodecs');
   let acfg=null;
   for(const r of [48000,44100]){ const cfg={codec:'mp4a.40.2',sampleRate:r,numberOfChannels:1,bitrate:64000}; try{ if((await AudioEncoder.isConfigSupported(cfg)).supported){ acfg=cfg; break; } }catch(e){} }
   if(!acfg) throw new Error('no-aac');
   await loadScript('vendor/mp4-muxer.js','Mp4Muxer');
   onProg(.02,'正在讀取錄音…');
-  const SRC=16000, src=await decodeMono(s.audio,SRC), sr=acfg.sampleRate, ratio=SRC/sr, dur=src.length/SRC, total0=Math.ceil(src.length/ratio);
+  const SRC=16000, src=await getSrc16(s,{cap,onProg}), sr=acfg.sampleRate, ratio=SRC/sr, dur=src.length/SRC, total0=Math.ceil(src.length/ratio);
   if(peakOf(src)<1e-4) throw new Error('silent-source');
   /* 錄音越長，每秒格數越少，手機才不會做太久 */
-  const FPS=dur<=480?10:dur<=900?8:6;
-  const VBR=800000;
+  const FPS=dur<=180?24:dur<=600?18:15;
+  const VBR=600000;
   let W=0, vcfg=null;
   for(const [w,codec,br] of [[1080,'avc1.420028',VBR],[1080,'avc1.42002a',VBR],[720,'avc1.42001f',Math.round(VBR*.6)]]){
     const cfg={codec,width:w,height:w,bitrate:br,framerate:FPS};
@@ -1296,14 +1314,17 @@ function liveMP4Type(){
     try{ if(MediaRecorder.isTypeSupported(t)) return t; }catch(e){}
   return '';
 }
-async function makeMP4Live(s,onProg,ctx){
+let liveCap=null;
+async function makeMP4Live(s,onProg,ctx,cap){ liveCap=cap;
   const type=liveMP4Type(); if(!type) throw new Error('no-live-mp4');
   ctx=ctx||new (window.AudioContext||window.webkitAudioContext)(); try{ await ctx.resume(); }catch(e){}
   onProg(.02,'正在讀取錄音…');
-  const ab=await new Promise((res,rej)=>{ s.audio.arrayBuffer().then(b=>{ const p=ctx.decodeAudioData(b,res,rej); if(p&&p.then) p.then(res,rej); },rej); });
+  const p16=await getSrc16(s,{cap:liveCap,onProg}); let ab;
+  try{ ab=ctx.createBuffer(1,p16.length,16000); ab.copyToChannel?ab.copyToChannel(p16,0):ab.getChannelData(0).set(p16); }
+  catch(e){ const pr=resample(p16,16000,ctx.sampleRate); ab=ctx.createBuffer(1,pr.length,ctx.sampleRate); ab.getChannelData(0).set(pr); }
   const scene=await buildScene({...s,duration:ab.duration},1080,ab.getChannelData(0),ab.sampleRate), [cv,cx]=mkCanvas(1080);
   scene.draw(cx,0);
-  const vstream=cv.captureStream(12), dest=ctx.createMediaStreamDestination(), srcNode=ctx.createBufferSource();
+  const vstream=cv.captureStream(24), dest=ctx.createMediaStreamDestination(), srcNode=ctx.createBufferSource();
   srcNode.buffer=ab; srcNode.connect(dest);
   const mr=new MediaRecorder(new MediaStream([...vstream.getVideoTracks(),...dest.stream.getAudioTracks()]),{mimeType:type,videoBitsPerSecond:2000000,audioBitsPerSecond:96000});
   const parts=[]; mr.ondataavailable=e=>{ if(e.data.size) parts.push(e.data); };
@@ -1312,7 +1333,7 @@ async function makeMP4Live(s,onProg,ctx){
   let t0=0, lastP=0;
   const iv=setInterval(()=>{ const t=Math.max(0,ctx.currentTime-t0); scene.draw(cx,Math.min(t,ab.duration));
     if(performance.now()-lastP>500){ lastP=performance.now(); const left=Math.max(0,ab.duration-t);
-      onProg(Math.min(.95,.05+.9*t/ab.duration),`正在錄成影片，還要約 ${left>=60?Math.ceil(left/60)+' 分鐘':Math.ceil(left)+' 秒'}，請不要關掉螢幕…`); } },100);
+      onProg(Math.min(.95,.05+.9*t/ab.duration),`正在錄成影片，還要約 ${left>=60?Math.ceil(left/60)+' 分鐘':Math.ceil(left)+' 秒'}，請不要關掉螢幕…`); } },1000/24);
   mr.start(1000); t0=ctx.currentTime+.15; srcNode.start(t0);
   srcNode.onended=()=>setTimeout(()=>{ try{ mr.stop(); }catch(e){} },400);
   liveAbort=()=>{ try{ srcNode.stop(); }catch(e){} try{ mr.stop(); }catch(e){} };
@@ -1325,16 +1346,67 @@ const peakOf=a=>{ let m=0; for(let i=0;i<a.length;i+=7){ const v=Math.abs(a[i]);
 const rmsOf=a=>{ let t=0,n=0; for(let i=0;i<a.length;i+=5){ t+=a[i]*a[i]; n++; } return n?Math.sqrt(t/n):0; };
 function ascOf(rate,ch){ const idx=[96000,88200,64000,48000,44100,32000,24000,22050,16000,12000,11025,8000,7350].indexOf(rate);
   return new Uint8Array([(2<<3)|(idx>>1),((idx&1)<<7)|(ch<<3)]); }
-/* 做好的檔案再解碼一次，確定真的有聲音（跟原始錄音比音量） */
-async function hasSound(blob,ref){
-  try{ const pcm=await decodeMono(blob,8000); const a=rmsOf(pcm), b=rmsOf(await decodeMono(ref,8000)); return a>Math.max(2e-4,b*0.25); }
-  catch(e){ return false; }
+/* 讀不出檔案時的最後一招：在背景「無聲播放」錄音，把聲音收集起來（Safari 能播就一定收得到） */
+function makeCapture(ctx,blob){
+  if(!ctx) return null;
+  const el=new Audio(); el.preload='auto'; el.playsInline=true; el.setAttribute('playsinline','');
+  for(const k of ['preservesPitch','webkitPreservesPitch','mozPreservesPitch']) try{ el[k]=false; }catch(e){}
+  let src=null, proc=null, sink=null, url=URL.createObjectURL(blob);
+  el.src=url;
+  try{ src=ctx.createMediaElementSource(el); proc=ctx.createScriptProcessor(4096,1,1); sink=ctx.createGain(); sink.gain.value=0;
+    src.connect(proc); proc.connect(sink); sink.connect(ctx.destination); }catch(e){ return null; }
+  /* 在使用者點擊的當下先播一下再停，之後才被允許在背景播放 */
+  el.play().then(()=>el.pause()).catch(()=>{});
+  return {
+    async grab(b,{start=0,maxSec=Infinity,speed=1,onProg}={}){
+      if(url) URL.revokeObjectURL(url); url=URL.createObjectURL(b); el.src=url;
+      await new Promise((res,rej)=>{ el.onloadedmetadata=res; el.onerror=()=>rej(new Error('el-load')); setTimeout(()=>rej(new Error('el-timeout')),15000); });
+      const dur=isFinite(el.duration)?el.duration:0;
+      try{ el.currentTime=Math.min(start,Math.max(0,dur-1)); }catch(e){}
+      el.playbackRate=speed; const parts=[]; let got=0, run=true; const need=maxSec*ctx.sampleRate/speed;
+      proc.onaudioprocess=e=>{ if(!run||el.paused) return; const d=new Float32Array(e.inputBuffer.getChannelData(0)); parts.push(d); got+=d.length;
+        if(onProg&&dur) onProg(Math.min(1,el.currentTime/dur)); if(got>=need){ run=false; el.pause(); } };
+      try{ await ctx.resume(); }catch(e){}
+      await el.play();
+      await new Promise(res=>{ const iv=setInterval(()=>{ if(el.ended||!run||el.paused){ clearInterval(iv); res(); } },200); el.onended=()=>{ clearInterval(iv); res(); }; });
+      run=false; el.pause(); proc.onaudioprocess=null;
+      const out=new Float32Array(got); let o=0; for(const d of parts){ out.set(d,o); o+=d.length; }
+      return {pcm:out,rate:ctx.sampleRate/speed};
+    },
+    close(){ try{ el.pause(); el.removeAttribute('src'); el.load(); }catch(e){} if(url) URL.revokeObjectURL(url); try{ src.disconnect(); proc.disconnect(); sink.disconnect(); }catch(e){} }
+  };
 }
-async function makeMP3(s,onProg){
+function resample(pcm,from,to){ if(from===to) return pcm; const n=Math.floor(pcm.length*to/from), out=new Float32Array(n), r=from/to;
+  for(let i=0;i<n;i++){ const x=i*r, k=Math.floor(x), f=x-k, a=pcm[k]||0, b=pcm[k+1]??a; out[i]=a+(b-a)*f; } return out; }
+/* 取得 16kHz 單聲道聲音：①錄音時存的原始聲音 ②解碼錄音檔 ③背景無聲播放收集 */
+const pcmCache=new Map();
+async function getSrc16(s,{cap,onProg}={}){
+  const key=s.id+'|'+(s.audio?.size||0); if(pcmCache.has(key)) return pcmCache.get(key);
+  let out=null;
+  if(s.pcm16){ try{ const i16=new Int16Array(await s.pcm16.arrayBuffer()); out=new Float32Array(i16.length); for(let i=0;i<i16.length;i++) out[i]=i16[i]/32768; }catch(e){ out=null; } }
+  if(!out){ try{ out=await decodeMono(s.audio,16000); }catch(e){ console.warn('decode16',e); } }
+  if(!out){ try{ const ac=new (window.AudioContext||window.webkitAudioContext)(); const ab=await new Promise((res,rej)=>{ s.audio.arrayBuffer().then(b=>{ const p=ac.decodeAudioData(b,res,rej); if(p&&p.then) p.then(res,rej); },rej); });
+      out=resample(ab.getChannelData(0),ab.sampleRate,16000); ac.close(); }catch(e){ console.warn('decodeCtx',e); } }
+  if(!out&&cap){ onProg?.(0,'這段錄音要用比較慢的方式讀取，請稍等…');
+    const sp=/iPhone|iPad|iPod/i.test(UA)?2:3;
+    const g=await cap.grab(s.audio,{speed:sp,onProg:p=>onProg?.(p,'正在讀取錄音（較慢的方式）…')}); out=resample(g.pcm,g.rate,16000); }
+  if(!out||!out.length) throw new Error('no-pcm');
+  if(pcmCache.size>3) pcmCache.clear(); pcmCache.set(key,out); return out;
+}
+/* 做好的檔案再檢查一次有沒有聲音；Safari 讀不回影片時改用背景播放抽查，抽查不了就相信它 */
+async function hasSound(blob,refRms,cap){
+  let pcm=null;
+  try{ pcm=await decodeMono(blob,8000); }catch(e){}
+  if(!pcm&&cap){ try{ const d=(await new Promise(r=>{ const v=document.createElement('video'); v.preload='metadata'; v.muted=true; v.onloadedmetadata=()=>r(v.duration); v.onerror=()=>r(0); v.src=URL.createObjectURL(blob); }))||0;
+      const g=await cap.grab(blob,{start:d*.3,maxSec:Math.min(4,Math.max(1,d*.3))}); pcm=g.pcm; }catch(e){ console.warn('verify-el',e); } }
+  if(!pcm) return true;
+  return rmsOf(pcm)>Math.max(2e-4,refRms*0.25);
+}
+async function makeMP3(s,onProg,cap){
   await loadScript('vendor/lame.min.js','lamejs');
   onProg(.03,'正在讀取錄音…');
-  const sr=22050, pcm=await decodeMono(s.audio,sr);
-  const enc=new lamejs.Mp3Encoder(1,sr,64), parts=[], B=1152, buf=new Int16Array(B);
+  const sr=16000, pcm=await getSrc16(s,{cap,onProg});
+  const enc=new lamejs.Mp3Encoder(1,sr,48), parts=[], B=1152, buf=new Int16Array(B);
   for(let off=0;off<pcm.length;off+=B){
     const n=Math.min(B,pcm.length-off), blk=n===B?buf:new Int16Array(n);
     for(let i=0;i<n;i++){ const v=Math.max(-1,Math.min(1,pcm[off+i])); blk[i]=v<0?v*0x8000:v*0x7FFF; }
@@ -1355,17 +1427,21 @@ async function openShare(s){
   prog(0,'正在做成 MP4 影片…'); open('#shareM');
   /* iPhone 規定聲音要在手指點擊當下啟動，所以先在這裡開好 */
   let ctx=null; try{ ctx=new (window.AudioContext||window.webkitAudioContext)(); ctx.resume(); }catch(e){}
-  let r=shareCache.get(key);
+  let r=shareCache.get(key), cap=null;
   if(!r){
-    const ok=async b=>{ if(job!==shareJob) return false; prog(.97,'正在確認影片有聲音…'); return hasSound(b,s.audio); };
-    try{ const b=await makeMP4(s,prog); if(!(await ok(b))) throw new Error('mp4-silent'); r={blob:b,ext:'mp4',kind:'video'}; }
+    cap=makeCapture(ctx,s.audio);
+    let refRms=null;
+    const ok=async b=>{ if(job!==shareJob) return false; prog(.97,'正在確認影片有聲音…');
+      if(refRms===null){ try{ refRms=rmsOf(await getSrc16(s,{cap})); }catch(e){ refRms=0; } }
+      return hasSound(b,refRms,cap); };
+    try{ const b=await makeMP4(s,prog,cap); if(!(await ok(b))) throw new Error('mp4-silent'); r={blob:b,ext:'mp4',kind:'video'}; }
     catch(e1){ console.warn('mp4 fast',e1); if(job!==shareJob){ ctx?.close(); return; }
-      try{ prog(0,'正在錄成 MP4 影片…'); const b=await makeMP4Live(s,prog,ctx); if(!(await ok(b))) throw new Error('live-silent'); r={blob:b,ext:'mp4',kind:'video'}; }
+      try{ prog(0,'正在錄成 MP4 影片…'); const b=await makeMP4Live(s,prog,ctx,cap); if(!(await ok(b))) throw new Error('live-silent'); r={blob:b,ext:'mp4',kind:'video'}; }
       catch(e2){ console.warn('mp4 live',e2); if(job!==shareJob){ ctx?.close(); return; }
-        try{ const b=await makeMP3(s,prog); if(!(await ok(b))) throw new Error('mp3-silent'); r={blob:b,ext:'mp3',kind:'audio'}; }
+        try{ const b=await makeMP3(s,prog,cap); if(!(await ok(b))) throw new Error('mp3-silent'); r={blob:b,ext:'mp3',kind:'audio'}; }
         catch(e3){ console.warn('mp3',e3); if(job!==shareJob){ ctx?.close(); return; }
           const ext=(s.type||'').includes('mp4')?'m4a':'webm'; r={blob:s.audio,ext,kind:'raw'}; } } }
-    try{ ctx?.close(); }catch(e){}
+    try{ cap?.close(); ctx?.close(); }catch(e){}
     if(job!==shareJob) return;
     if(r.kind!=='raw') shareCache.set(key,r);
   } else { try{ ctx?.close(); }catch(e){} }
@@ -1429,7 +1505,7 @@ $('#backupBtn').addEventListener('click',async()=>{
   const a=await allStories(); if(!a.length){ toast('還沒有唱片可以備份'); return; }
   toast('正在打包，請稍等…');
   const parts=[`{"app":"life-phono","v":1,"elder":${JSON.stringify(elder)},"stories":[`];
-  for(let i=0;i<a.length;i++){ const s=a[i]; parts.push((i?',':'')+JSON.stringify({...s,audio:await b64(s.audio),photo:s.photo?await b64(s.photo):null,photos:await Promise.all(photosOf(s).map(b64))})); }
+  for(let i=0;i<a.length;i++){ const s=a[i]; parts.push((i?',':'')+JSON.stringify({...s,pcm16:undefined,audio:await b64(s.audio),photo:s.photo?await b64(s.photo):null,photos:await Promise.all(photosOf(s).map(b64))})); }
   parts.push(']}');
   dl(new Blob(parts,{type:'application/json'}),`時光留聲機備份-${elder.name||'家人'}-${new Date().toISOString().slice(0,10)}.json`);
   try{ localStorage.setItem('phono-last-backup',String(Date.now())); }catch(e){}
