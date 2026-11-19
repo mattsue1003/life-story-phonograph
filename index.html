@@ -1524,6 +1524,36 @@ function liveMP4Type(){
     try{ if(MediaRecorder.isTypeSupported(t)) return t; }catch(e){}
   return '';
 }
+/* Safari／Chrome 內建錄影做出的 MP4 是「分段」格式，總長度常寫成「未知」（播放器會顯示幾百萬秒、不能拉進度）。
+   錄完後把實際長度寫回檔頭（mvhd、tkhd、mdhd、mehd）。 */
+function fixMp4Duration(buf,sec){
+  const v=new DataView(buf), u8=new Uint8Array(buf), N=buf.byteLength;
+  const type=o=>String.fromCharCode(u8[o+4],u8[o+5],u8[o+6],u8[o+7]);
+  const boxes=(a,b)=>{ const out=[]; let o=a; while(o+8<=b){ let sz=v.getUint32(o); let hd=8; if(sz===1){ sz=Number(v.getBigUint64(o+8)); hd=16; } else if(sz===0) sz=b-o; if(sz<8||o+sz>b) break; out.push({o,sz,hd,t:type(o)}); o+=sz; } return out; };
+  const setDur=(o,ver,offV0,offV1,ts)=>{ const val=Math.round(sec*ts); if(ver===1) v.setBigUint64(o+offV1,BigInt(val)); else v.setUint32(o+offV0,Math.min(val,0xFFFFFFFE)); };
+  const moov=boxes(0,N).find(b=>b.t==='moov'); if(!moov) return buf;
+  let movieTs=1000;
+  for(const b of boxes(moov.o+moov.hd,moov.o+moov.sz)){
+    const c=b.o+b.hd;
+    if(b.t==='mvhd'){ const ver=u8[c]; movieTs=ver===1?v.getUint32(c+20):v.getUint32(c+12); setDur(c,ver,16,24,movieTs); }
+  }
+  for(const b of boxes(moov.o+moov.hd,moov.o+moov.sz)){
+    if(b.t==='trak'){ for(const t of boxes(b.o+b.hd,b.o+b.sz)){ const c=t.o+t.hd;
+        if(t.t==='tkhd'){ const ver=u8[c]; setDur(c,ver,20,28,movieTs); }
+        if(t.t==='mdia'){ for(const m of boxes(t.o+t.hd,t.o+t.sz)) if(m.t==='mdhd'){ const mc=m.o+m.hd, ver=u8[mc], ts=ver===1?v.getUint32(mc+20):v.getUint32(mc+12); setDur(mc,ver,16,24,ts); } } } }
+    if(b.t==='mvex'){ for(const m of boxes(b.o+b.hd,b.o+b.sz)) if(m.t==='mehd'){ const mc=m.o+m.hd, ver=u8[mc]; if(ver===1) v.setBigUint64(mc+4,BigInt(Math.round(sec*movieTs))); else v.setUint32(mc+4,Math.round(sec*movieTs)); } }
+  }
+  /* 每個片段裡的畫格長度：Safari 會把最後一格寫成負數（讀起來像幾十億），改成前一格的長度 */
+  for(const mf of boxes(0,N)){ if(mf.t!=='moof') continue;
+    for(const tf of boxes(mf.o+mf.hd,mf.o+mf.sz)){ if(tf.t!=='traf') continue;
+      let def=0; const kids=boxes(tf.o+tf.hd,tf.o+tf.sz);
+      for(const k of kids) if(k.t==='tfhd'){ const c=k.o+k.hd, fl=(u8[c+1]<<16)|(u8[c+2]<<8)|u8[c+3]; let x=c+8; if(fl&1) x+=8; if(fl&2) x+=4; if(fl&8) def=v.getUint32(x); }
+      for(const k of kids){ if(k.t!=='trun') continue; const c=k.o+k.hd, fl=(u8[c+1]<<16)|(u8[c+2]<<8)|u8[c+3], n=v.getUint32(c+4); if(!(fl&0x100)) continue;
+        let x=c+8; if(fl&1) x+=4; if(fl&4) x+=4; let prev=def||1;
+        for(let i=0;i<n&&x+4<=k.o+k.sz;i++){ const d=v.getUint32(x); if(d>=0x80000000||(def&&d>def*1000)) v.setUint32(x,prev); else if(d) prev=d;
+          x+=4; if(fl&0x200) x+=4; if(fl&0x400) x+=4; if(fl&0x800) x+=4; } } } }
+  return buf;
+}
 let liveCap=null;
 async function makeMP4Live(s,onProg,ctx,cap){ liveCap=cap;
   const type=liveMP4Type(); if(!type) throw new Error('no-live-mp4');
@@ -1548,8 +1578,8 @@ async function makeMP4Live(s,onProg,ctx,cap){ liveCap=cap;
   srcNode.onended=()=>setTimeout(()=>{ try{ mr.stop(); }catch(e){} },400);
   liveAbort=()=>{ try{ srcNode.stop(); }catch(e){} try{ mr.stop(); }catch(e){} };
   try{ await done; } finally { clearInterval(iv); liveAbort=null; vstream.getTracks().forEach(t=>t.stop()); try{ lk?.release(); }catch(e){} scene.dispose(); cv.width=cv.height=0; }
-  const blob=new Blob(parts,{type:'video/mp4'}); if(!blob.size) throw new Error('empty');
-  return blob;
+  const raw=new Blob(parts,{type:'video/mp4'}); if(!raw.size) throw new Error('empty');
+  try{ return new Blob([fixMp4Duration(await raw.arrayBuffer(),ab.duration)],{type:'video/mp4'}); }catch(e){ console.warn('fix duration',e); return raw; }
 }
 let liveAbort=null;
 const peakOf=a=>{ let m=0; for(let i=0;i<a.length;i+=7){ const v=Math.abs(a[i]); if(v>m) m=v; } return m; };
