@@ -291,19 +291,153 @@ body.recording:not(.paused) .rec-dot{opacity:1;animation:blink 1s infinite}
   padding:12px 22px;border-radius:14px;font-size:17px;transition:transform .3s;z-index:70;max-width:90vw;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.6)}
 .toast.on{transform:translateX(-50%) translateY(0)}
 
-/* ---------- 故事書（列印） ---------- */
+/* ---------- 故事書設計 ---------- */
+.tpl-mini{display:flex;gap:8px;margin:0 0 16px}
+.tpl-mini i{flex:1;aspect-ratio:3/4;border-radius:4px;border:1px solid rgba(255,255,255,.18)}
+.m-vintage,.tp-vintage .tp-sw{background:linear-gradient(#F3E9D7,#E8D9BD)}
+.m-noir,.tp-noir .tp-sw{background:linear-gradient(#141210,#050505);box-shadow:inset 0 0 0 3px #000,inset 0 0 0 4px #E4CB86}
+.m-water,.tp-water .tp-sw{background:radial-gradient(circle at 20% 20%,rgba(240,180,106,.55),transparent 45%),radial-gradient(circle at 80% 85%,rgba(142,193,214,.55),transparent 45%),#FFFDF8}
+.m-classic,.tp-classic .tp-sw{background:#fff;box-shadow:inset 0 0 0 6px #fff,inset 0 0 0 7px #8B1E1E}
+.studio{display:grid;grid-template-columns:minmax(280px,360px) 1fr;gap:26px;align-items:start}
+.st-side{display:grid;gap:16px;position:sticky;top:calc(var(--navH) + 16px);max-height:calc(100vh - var(--navH) - 32px);overflow:auto;padding-right:4px}
+.st-side .panel{padding:18px}
+.st-side .switch{margin-top:10px;color:var(--text)}
+select.t{width:100%;border:1px solid rgba(255,255,255,.2);border-radius:12px;padding:12px 14px;background:#151515;color:var(--text);font-size:17px}
+.tpls{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.tp{border:1px solid rgba(255,255,255,.16);border-radius:12px;padding:8px;text-align:left;background:#0b0b0b;transition:border-color .2s}
+.tp .tp-sw{display:block;aspect-ratio:3/4;border-radius:4px;margin-bottom:8px;position:relative;overflow:hidden}
+.tp .tp-sw::after{content:"";position:absolute;left:22%;right:22%;top:24%;height:30%;background:rgba(120,100,80,.35);border:3px solid rgba(255,255,255,.85)}
+.tp-noir .tp-sw::after{border-color:#E4CB86;background:rgba(228,203,134,.18)}
+.tp-water .tp-sw::after{border:none;border-radius:50%;background:rgba(120,100,80,.25)}
+.tp-classic .tp-sw::after{border:1px solid #333;background:rgba(0,0,0,.08)}
+.tp b{display:block;font-family:var(--serif);font-size:16px}
+.tp span{font-size:13px;color:var(--text3)}
+.tp.on{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)}
+.cover-pick{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.cover-pick button{width:64px;height:64px;border-radius:8px;overflow:hidden;border:2px solid transparent;background:#1a1a1a;color:var(--text3);font-size:12px}
+.cover-pick button img{width:100%;height:100%;object-fit:cover;display:block}
+.cover-pick button.on{border-color:var(--gold)}
+.st-print{position:sticky;bottom:0;background:linear-gradient(transparent,#000 22%);padding-top:14px}
+.st-bar{display:flex;justify-content:space-between;gap:10px;margin-bottom:10px;font-size:15px;color:var(--text2)}
+.bk-slot{width:calc(793.7px * var(--s,.6));height:calc(1122.5px * var(--s,.6))}
+.bk-slot>.bk-page{transform:scale(var(--s,.6))}
+.bk-preview{display:flex;flex-direction:column;align-items:center;gap:18px;padding:18px 0 40px;background:#1a1a1a;border-radius:14px;min-height:300px}
+.bk-slot{position:relative;box-shadow:0 10px 30px rgba(0,0,0,.55);flex:none}
+.bk-slot>.bk-page{position:absolute;left:0;top:0;transform-origin:0 0}
+.bk-slot .pno{position:absolute;right:0;bottom:-20px;font-size:12px;color:var(--text3)}
+#bkMeasure{position:absolute;left:-99999px;top:0;visibility:hidden;pointer-events:none}
+
+/* ---- 書頁本體（mm 為單位，列印時 1:1） ---- */
+.bk-page{width:210mm;height:297mm;overflow:hidden;position:relative;box-sizing:border-box;background:var(--b-bg);color:var(--b-ink);
+  font-family:var(--b-body);font-size:11.5pt;line-height:1.85;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.bk-page *{box-sizing:border-box}
+.bk-in{position:absolute;inset:20mm 20mm 22mm;display:flex;flex-direction:column}
+.bk-foot{position:absolute;left:20mm;right:20mm;bottom:10mm;display:flex;justify-content:space-between;font-size:8.5pt;color:var(--b-mute);letter-spacing:.08em}
+.bk-h{font-family:var(--b-title);color:var(--b-ink);font-weight:700;margin:0;line-height:1.35}
+.bk-kicker{font-size:9pt;letter-spacing:.25em;color:var(--b-accent);text-transform:uppercase;font-family:var(--b-title)}
+.bk-photo{position:relative;background:var(--b-frame);padding:var(--b-mat);box-shadow:var(--b-shadow);display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:var(--b-radius)}
+.bk-photo img{display:block;max-width:100%;max-height:100%;object-fit:contain;border-radius:calc(var(--b-radius) * .6)}
+.bk-photo .cn{position:absolute;width:8mm;height:8mm;background:var(--b-corner);display:none}
+/* 封面 */
+.cv .bk-in{align-items:center;justify-content:center;text-align:center}
+.cv-photo{width:130mm;height:120mm;margin:6mm 0 12mm}
+.cv-title{font-size:34pt;letter-spacing:.12em}
+.cv-photo.cv-disc{width:92mm;height:92mm;border-radius:50%;background:radial-gradient(circle,var(--b-accent) 0 27%,#16120e 28% 99%);box-shadow:0 0 0 2mm var(--b-accent),0 3mm 8mm rgba(0,0,0,.3)}
+.st-text.nc::first-letter{font-size:inherit!important;float:none!important;margin:0!important;color:inherit!important}
+.cv-sub{margin-top:5mm;font-size:13pt;color:var(--b-accent);letter-spacing:.15em}
+.cv-orn{width:40mm;height:1px;background:var(--b-accent);margin:9mm auto 0;opacity:.7}
+.cv-brand{position:absolute;bottom:14mm;left:0;right:0;text-align:center;font-size:9pt;letter-spacing:.35em;color:var(--b-mute);font-family:var(--b-title)}
+/* 獻詞 */
+.dd .bk-in{justify-content:center;align-items:center;text-align:center}
+.dd p{font-size:15pt;line-height:2.1;max-width:120mm;white-space:pre-wrap;font-family:var(--b-title);margin:8mm 0 0}
+/* 目錄 */
+.toc-h{font-size:24pt;margin-bottom:10mm}
+.toc-ch{font-family:var(--b-title);font-weight:700;color:var(--b-accent);margin:5mm 0 1mm;font-size:12.5pt}
+.toc-row{display:flex;align-items:baseline;gap:3mm;font-size:11pt;line-height:1.9}
+.toc-row .tt{flex:0 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.toc-row .dots{flex:1;border-bottom:1px dotted var(--b-mute);transform:translateY(-1.2mm);min-width:6mm}
+.toc-row .pn{flex:none;font-variant-numeric:tabular-nums;color:var(--b-mute)}
+/* 章節頁 */
+.ch .bk-in{justify-content:center;align-items:center;text-align:center}
+.ch-no{font-size:11pt;letter-spacing:.4em;color:var(--b-accent);font-family:var(--b-title)}
+.ch-name{font-size:40pt;letter-spacing:.2em;margin:6mm 0 4mm}
+.ch-tag{font-size:12pt;color:var(--b-mute);letter-spacing:.2em}
+.ch-ring{width:46mm;height:46mm;border-radius:50%;border:1px solid var(--b-accent);margin:0 auto 12mm;display:flex;align-items:center;justify-content:center;opacity:.9}
+.ch-ring i{width:18mm;height:18mm;border-radius:50%;background:var(--ch-c)}
+/* 故事頁 */
+.st-top{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid var(--b-rule);padding-bottom:2.5mm;margin-bottom:6mm}
+.st-title{font-size:21pt;margin-bottom:2.5mm}
+.st-meta{font-size:9.5pt;color:var(--b-mute);letter-spacing:.05em;margin-bottom:4mm}
+.st-q{font-family:var(--b-title);font-size:11pt;color:var(--b-accent);border-left:2px solid var(--b-accent);padding:1mm 0 1mm 4mm;margin-bottom:6mm}
+.st-ph{display:grid;gap:5mm;margin-bottom:6mm}
+.st-ph.n1{grid-template-columns:1fr}.st-ph.n1 .bk-photo{height:92mm}
+.st-ph.n2{grid-template-columns:1fr 1fr}.st-ph.n2 .bk-photo{height:70mm}
+.st-ph.n3{grid-template-columns:1.6fr 1fr;grid-template-rows:1fr 1fr;height:92mm}.st-ph.n3 .bk-photo:first-child{grid-row:span 2}
+.st-body{flex:1;min-height:0;overflow:hidden;position:relative}
+.st-text{white-space:pre-wrap;text-align:justify;margin:0}
+.st-empty{color:var(--b-mute);text-align:center;padding-top:10mm;font-family:var(--b-title)}
+.st-cont{font-size:9.5pt;color:var(--b-mute);margin-bottom:4mm}
+/* 照片頁 */
+.pp-grid{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:6mm;min-height:0;align-content:start}
+.pp-grid .bk-photo{height:72mm}
+.pp-grid.few{grid-template-columns:1fr}.pp-grid.few .bk-photo{height:110mm}
+/* 封底 */
+.bc .bk-in{justify-content:center;align-items:center;text-align:center}
+.bc p{margin:2mm 0;color:var(--b-mute)}
+.bc .big{font-family:var(--b-title);font-size:16pt;color:var(--b-ink);margin-bottom:6mm}
+
+/* ===== 模板 1：復古相簿 ===== */
+.t-vintage{--b-bg:#F3E9D7;--b-ink:#3B2A1E;--b-accent:#8A5A2B;--b-mute:#8B7660;--b-rule:#D6C3A2;--b-title:"Noto Serif TC",serif;--b-body:"Noto Serif TC",serif;
+  --b-frame:#FFFDF8;--b-mat:3.2mm;--b-shadow:0 1.5mm 4mm rgba(70,45,20,.28);--b-radius:0;--b-corner:#6B4A2B}
+.t-vintage.bk-page{background:radial-gradient(ellipse at 30% 20%,rgba(255,255,255,.45),transparent 60%),radial-gradient(ellipse at 80% 90%,rgba(160,120,70,.18),transparent 55%),#F3E9D7}
+.t-vintage .bk-photo .cn{display:block}
+.t-vintage .bk-photo .cn.a{left:0;top:0;clip-path:polygon(0 0,100% 0,0 100%)}
+.t-vintage .bk-photo .cn.b{right:0;top:0;clip-path:polygon(0 0,100% 0,100% 100%)}
+.t-vintage .bk-photo .cn.c{left:0;bottom:0;clip-path:polygon(0 0,100% 100%,0 100%)}
+.t-vintage .bk-photo .cn.d{right:0;bottom:0;clip-path:polygon(100% 0,100% 100%,0 100%)}
+.t-vintage.cv .bk-in::before,.t-vintage.ch .bk-in::before{content:"";position:absolute;inset:-6mm;border:1px solid var(--b-rule);outline:1px solid var(--b-rule);outline-offset:-3mm}
+.t-vintage .cv-photo{transform:rotate(-1.5deg)}
+.t-vintage .st-ph .bk-photo:nth-child(2){transform:rotate(1.2deg)}
+/* ===== 模板 2：典雅黑金 ===== */
+.t-noir{--b-bg:#0D0B09;--b-ink:#F4EEE2;--b-accent:#E4CB86;--b-mute:rgba(244,238,226,.55);--b-rule:rgba(228,203,134,.35);--b-title:"Noto Serif TC",serif;--b-body:"Noto Sans TC",sans-serif;
+  --b-frame:#16120E;--b-mat:1.6mm;--b-shadow:0 0 0 .35mm #E4CB86,0 2mm 6mm rgba(0,0,0,.6);--b-radius:0;--b-corner:transparent}
+.t-noir.bk-page::before{content:"";position:absolute;inset:8mm;border:.35mm solid rgba(228,203,134,.55);pointer-events:none}
+.t-noir.bk-page::after{content:"";position:absolute;inset:9.5mm;border:.2mm solid rgba(228,203,134,.25);pointer-events:none}
+.t-noir.cv .cv-photo{width:150mm;height:130mm}
+.t-noir .cv-title{background:linear-gradient(180deg,#F3DEA2,#C9A961);-webkit-background-clip:text;background-clip:text;color:transparent}
+.t-noir .ch-name{color:#E4CB86}
+/* ===== 模板 3：溫暖水彩 ===== */
+.t-water{--b-bg:#FFFDF8;--b-ink:#4A3F35;--b-accent:#C0743A;--b-mute:#A08F7E;--b-rule:#EADFD0;--b-title:"LXGW WenKai TC","Noto Serif TC",serif;--b-body:"LXGW WenKai TC","Noto Serif TC",serif;
+  --b-frame:#fff;--b-mat:0;--b-shadow:0 2mm 6mm rgba(120,90,60,.22);--b-radius:5mm;--b-corner:transparent}
+.t-water.bk-page{background:radial-gradient(circle at 8% 6%,color-mix(in srgb,var(--ch-c,#F0B46A) 42%,transparent),transparent 34%),radial-gradient(circle at 96% 98%,rgba(142,193,214,.45),transparent 36%),radial-gradient(circle at 92% 8%,rgba(201,160,220,.22),transparent 26%),#FFFDF8}
+.t-water .bk-in{font-size:12.5pt}
+.t-water .cv-photo{width:120mm;height:120mm;border-radius:50%}
+.t-water .cv-photo img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.t-water .cv-title{font-size:38pt}
+.t-water .st-ph .bk-photo:nth-child(odd){transform:rotate(-1deg)}
+.t-water .st-ph .bk-photo:nth-child(even){transform:rotate(1.2deg)}
+.t-water .st-q{border-left:none;background:color-mix(in srgb,var(--ch-c,#F0B46A) 16%,#fff);border-radius:3mm;padding:2.5mm 4mm}
+/* ===== 模板 4：經典書冊 ===== */
+.t-classic{--b-bg:#FFFFFF;--b-ink:#222;--b-accent:#8B1E1E;--b-mute:#888;--b-rule:#ddd;--b-title:"Noto Serif TC",serif;--b-body:"Noto Serif TC",serif;
+  --b-frame:#fff;--b-mat:0;--b-shadow:0 0 0 .25mm #bbb;--b-radius:0;--b-corner:transparent}
+.t-classic .bk-in{inset:24mm 26mm 26mm}
+.t-classic .bk-foot{justify-content:center;gap:6mm}
+.t-classic .cv-photo{width:100mm;height:90mm}
+.t-classic .cv-title{font-size:30pt;letter-spacing:.3em}
+.t-classic.cv .bk-in::before{content:"";position:absolute;left:50%;top:6mm;transform:translateX(-50%);width:60mm;border-top:.6mm solid var(--b-accent)}
+.t-classic.cv .bk-in::after{content:"";position:absolute;left:50%;bottom:6mm;transform:translateX(-50%);width:60mm;border-top:.6mm solid var(--b-accent)}
+.t-classic .st-text::first-letter{font-size:300%;float:left;line-height:1;margin:1mm 2mm 0 0;color:var(--b-accent);font-family:var(--b-title)}
+.t-classic .st-q{border-left:none;font-style:italic;padding-left:0}
+
+/* ---------- 列印 ---------- */
 #book{display:none}
 @media print{
-  html,body{background:#fff!important;color:#222;padding:0}
-  .nav,.wrap,.modal,.toast,[data-oth-report]{display:none!important}
-  #book{display:block;font-family:var(--serif);color:#222}
-  #book h1{text-align:center;font-size:28pt;margin:40pt 0 6pt}
-  #book .sub{text-align:center;color:#666;margin-bottom:30pt}
-  #book article{page-break-inside:avoid;border-top:1px solid #ccc;padding:14pt 0}
-  #book h3{font-size:16pt;margin:0 0 4pt}
-  #book .m{color:#777;font-size:10pt;font-family:var(--sans)}
-  #book img{max-width:46%;max-height:200pt;margin:8pt 8pt 8pt 0;border-radius:6pt;vertical-align:top}
-  #book p{white-space:pre-wrap;line-height:1.8}
+  @page{size:A4;margin:0}
+  html,body{background:#fff!important;padding:0!important;margin:0!important}
+  .nav,.wrap,.modal,.toast,[data-oth-report],.links{display:none!important}
+  #book{display:block}
+  #book .bk-page{transform:none!important;position:relative!important;break-after:page;page-break-after:always;margin:0}
+  #book .bk-page:last-child{break-after:auto;page-break-after:auto}
 }
 
 /* ---------- 平板、手機 ---------- */
@@ -321,6 +455,9 @@ body.recording:not(.paused) .rec-dot{opacity:1;animation:blink 1s infinite}
   .hero-in{padding:30px 22px}
   .save-left{position:static}
   .book-grid .cover{max-width:300px;width:100%;margin:0 auto}
+  .studio{grid-template-columns:1fr}
+  .st-side{position:static;max-height:none;overflow:visible}
+  .st-print{position:sticky;bottom:calc(var(--tabH) + env(safe-area-inset-bottom));z-index:5}
   .lower{grid-template-columns:1fr}
 }
 @media (max-width:760px){
@@ -563,9 +700,10 @@ body.recording [data-oth-report],body.modal-open [data-oth-report]{display:none!
       <div class="cover" id="cover"></div>
       <div class="book-side">
         <div class="panel">
-          <h3>列印故事書</h3>
-          <p class="muted" style="margin:6px 0 16px">每個故事一段，有名稱、年代、重點紀錄和老照片；手機上可選「存成 PDF」。</p>
-          <button class="btn" id="bookBtn" style="width:100%">列印生命故事書</button>
+          <h3>設計故事書</h3>
+          <p class="muted" style="margin:6px 0 14px">挑一個模板，封面、獻詞、目錄、每段人生的章節頁都會自動排好，可以先預覽每一頁，再列印或存成 PDF。</p>
+          <div class="tpl-mini" aria-hidden="true"><i class="m-vintage"></i><i class="m-noir"></i><i class="m-water"></i><i class="m-classic"></i></div>
+          <button class="btn" id="bookBtn" style="width:100%">開始設計故事書</button>
         </div>
         <div class="panel">
           <h3>備份與搬家</h3>
@@ -577,6 +715,46 @@ body.recording [data-oth-report],body.modal-open [data-oth-report]{display:none!
           </div>
         </div>
         <div class="panel" id="space" hidden></div>
+      </div>
+    </div>
+  </section>
+  <!-- ========== 故事書設計 ========== -->
+  <section data-view="studio">
+    <div class="page-h"><div><div class="eyebrow">Book Studio</div><h2>設計故事書</h2><p>選模板、改書名，右邊即時預覽；滿意了再列印或存成 PDF。</p></div>
+      <button class="btn ghost" data-go="book" style="min-height:48px">← 回故事書</button></div>
+    <div class="studio">
+      <aside class="st-side">
+        <div class="panel">
+          <h3>1　選一個模板</h3>
+          <div class="tpls" id="tpls"></div>
+        </div>
+        <div class="panel">
+          <h3>2　書名與獻詞</h3>
+          <label class="f" for="bkTitle">書名</label><input class="t" id="bkTitle">
+          <label class="f" for="bkSub">副標題</label><input class="t" id="bkSub">
+          <label class="f" for="bkDedi">獻詞（會印在封面後一頁，可不填）</label>
+          <textarea class="t" id="bkDedi" style="min-height:100px" placeholder="例如：獻給我們最愛的阿嬤，謝謝您把一輩子的故事說給我們聽。"></textarea>
+        </div>
+        <div class="panel">
+          <h3>3　封面照片</h3>
+          <div class="cover-pick" id="coverPick"></div>
+        </div>
+        <div class="panel">
+          <h3>4　內容</h3>
+          <label class="switch"><input type="checkbox" id="bkToc" checked> 目錄</label>
+          <label class="switch"><input type="checkbox" id="bkChap" checked> 每段人生前加章節頁</label>
+          <label class="switch"><input type="checkbox" id="bkMore" checked> 多的照片另外排成照片頁</label>
+          <label class="f" for="bkOrder">故事順序</label>
+          <select class="t" id="bkOrder"><option value="life">依人生階段（童年 → 留給家人）</option><option value="time">依錄音日期</option></select>
+        </div>
+        <div class="st-print">
+          <button class="btn" id="bkPrint" style="width:100%">列印／存成 PDF</button>
+          <p class="muted" id="bkHow" style="margin:8px 0 0;font-size:14px"></p>
+        </div>
+      </aside>
+      <div class="st-main">
+        <div class="st-bar"><span id="bkCount"></span><span class="muted" id="bkBusy"></span></div>
+        <div class="bk-preview" id="bkPreview"></div>
       </div>
     </div>
   </section>
@@ -743,25 +921,25 @@ const busyMsg=()=>isRecording()?'請先按「說完了」結束錄音':pending?'
 function go(v,hist='push'){
   view=v; document.body.dataset.view=v;
   document.querySelectorAll('section[data-view]').forEach(s=>s.classList.toggle('on',s.dataset.view===v));
-  const tab={record:'topics',save:'topics'}[v]||v;
+  const tab={record:'topics',save:'topics',studio:'book'}[v]||v;
   document.querySelectorAll('.links [data-go]').forEach(b=>{ const on=b.dataset.go===tab; b.classList.toggle('on',on); on?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'); });
   window.scrollTo(0,0);
   try{ if(hist==='push') history.pushState({v},''); else if(hist==='replace') history.replaceState({v},''); }catch(e){}
   if(v!=='shelf'&&!player.paused) player.pause();
   if(v!=='shelf') $('#nextBanner').hidden=true;
-  if(v==='home') renderHome(); if(v==='shelf') renderShelf(); if(v==='topics') renderTopics(); if(v==='book') renderBook();
+  if(v==='home') renderHome(); if(v==='shelf') renderShelf(); if(v==='topics') renderTopics(); if(v==='book') renderBook(); if(v==='studio') renderStudio();
 }
 document.addEventListener('click',e=>{const g=e.target.closest('[data-go]'); if(g){ const m=busyMsg(); if(m){toast(m);return;} if(g.dataset.go!==view) go(g.dataset.go); else window.scrollTo({top:0,behavior:'smooth'}); } });
 try{ history.replaceState({v:'home'},''); }catch(e){}
 window.addEventListener('popstate',e=>{
   const m=busyMsg(); if(m){ try{history.pushState({v:view},'')}catch(_){} toast(m); return; }
-  const o=document.querySelector('.modal.on'); if(o){ o.classList.remove('on'); try{history.pushState({v:view},'')}catch(_){} return; }
+  const o=document.querySelector('.modal.on'); if(o){ if(o.id==='shareM') $('#shCancel').click(); else if(o.id==='editM') $('#eCancel').click(); else if(o.id!=='draftM') o.classList.remove('on'); try{history.pushState({v:view},'')}catch(_){} return; }
   let v=e.state?.v||'home'; if(v==='record'&&!cur.q) v='topics'; if(v==='save') v='shelf';
   go(v,false);
 });
-document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ const m=document.querySelector('.modal.on'); if(m&&m.id!=='draftM') m.classList.remove('on'); } });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ const m=document.querySelector('.modal.on'); if(!m) return; if(m.id==='shareM') $('#shCancel').click(); else if(m.id==='editM') $('#eCancel').click(); else if(!['draftM','consent'].includes(m.id)) m.classList.remove('on'); } });
 document.querySelectorAll('.modal').forEach(m=>{
-  m.addEventListener('click',e=>{ if(e.target===m&&!['draftM','consent','shareM'].includes(m.id)) m.classList.remove('on'); });
+  m.addEventListener('click',e=>{ if(e.target!==m) return; if(m.id==='editM') $('#eCancel').click(); else if(!['draftM','consent','shareM'].includes(m.id)) m.classList.remove('on'); });
   new MutationObserver(()=>{ document.body.classList.toggle('modal-open',!!document.querySelector('.modal.on')); if(m.classList.contains('on')&&!isMobile) setTimeout(()=>(m.querySelector('input.t')||m.querySelector('.btn:not(.ghost)'))?.focus({preventScroll:true}),60); }).observe(m,{attributes:true,attributeFilter:['class']});
 });
 
@@ -919,10 +1097,10 @@ async function checkDraft(){
   return true;
 }
 
-let pending=null;
+let pending=null, savePlayerUrl='';
 function openSave(p,text,hist){
   pending=p;
-  $('#savePlayer').src=URL.createObjectURL(p.audio);
+  if(savePlayerUrl) URL.revokeObjectURL(savePlayerUrl); savePlayerUrl=URL.createObjectURL(p.audio); $('#savePlayer').src=savePlayerUrl;
   $('#saveDisc').innerHTML=''; $('#saveDisc').setAttribute('style',`--lab:${catOf(p.cat).color}`);
   $('#sTitle').value=p.q.replace(/[？?]$/,''); $('#sEra').value=''; $('#sText').value=text; $('#sPhoto').value=''; photoTask=null; sGrid.set([]);
   go('save',hist);
@@ -970,10 +1148,28 @@ function startSTT(){
 function stopSTT(){ sttWant=false; try{rec&&rec.stop()}catch(e){} }
 
 /* ---------- 保存 ---------- */
-function shrinkImg(file,max){ return new Promise(res=>{ const img=new Image(); img.onload=()=>{
-  const k=Math.min(1,max/Math.max(img.width,img.height)); const c=document.createElement('canvas'); c.width=img.width*k; c.height=img.height*k;
-  c.getContext('2d').drawImage(img,0,0,c.width,c.height); c.toBlob(b=>res(b||file),'image/jpeg',.88); URL.revokeObjectURL(img.src); };
-  img.onerror=()=>res(file); img.src=URL.createObjectURL(file); }); }
+/* 照片縮小成最長邊 1600：讀不出來的格式（例如部分 HEIC）回傳 null，不放進唱片 */
+async function shrinkImg(file,max){
+  const draw=(src,w,h)=>{ const k=Math.min(1,max/Math.max(w,h)), c=document.createElement('canvas'); c.width=Math.max(1,Math.round(w*k)); c.height=Math.max(1,Math.round(h*k));
+    const x=c.getContext('2d'); if(!x){ c.width=c.height=0; lowMem=true; return Promise.resolve(null); }
+    x.imageSmoothingEnabled=true; x.imageSmoothingQuality='high'; x.drawImage(src,0,0,c.width,c.height);
+    return new Promise(res=>{ try{ c.toBlob(b=>{ c.width=c.height=0; if(!b) lowMem=true; res(b); },'image/jpeg',.88); }catch(e){ c.width=c.height=0; lowMem=true; res(null); } }); };
+  const viaImg=()=>new Promise(res=>{ const img=new Image(), u=URL.createObjectURL(file);
+    img.onload=async()=>{ try{ res(await draw(img,img.naturalWidth,img.naturalHeight)); }catch(e){ res(null); } URL.revokeObjectURL(u); };
+    img.onerror=()=>{ URL.revokeObjectURL(u); res(null); }; img.src=u; });
+  let out=await viaImg();
+  if(!out&&window.createImageBitmap){ try{ const bm=await createImageBitmap(file); out=await draw(bm,bm.width,bm.height); bm.close?.(); }catch(e){ out=null; } }
+  return out&&out.size?out:null;
+}
+/* 一張一張處理（同時處理很多張大照片，手機容易記憶體不足而重新整理） */
+let lowMem=false;
+async function processPhotos(files,onEach){
+  const ok=[]; let bad=0; lowMem=false;
+  for(let i=0;i<files.length;i++){ onEach?.(i,files.length); const b=await shrinkImg(files[i],1600); if(b) ok.push(b); else bad++; await tick0(); }
+  if(bad&&lowMem){ toast('手機記憶體暫時不夠，照片沒加進去。請關掉其他 App 或重新整理後再試一次'); return ok; }
+  if(bad) toast(bad===files.length?'這張照片的格式讀不出來（例如 HEIC），請改選 JPG 或在相簿裡「拷貝」後再選':`有 ${bad} 張照片讀不出來，已略過；請改選 JPG`);
+  return ok;
+}
 /* 照片格：可多張，第一張是封面，點照片換封面，× 移除 */
 const MAXPH=12;
 function photoGrid(el,onChange){
@@ -985,18 +1181,26 @@ function photoGrid(el,onChange){
     if(r){ arr.splice(+r.dataset.rm,1); render(); } else if(c&&+c.dataset.cover>0){ const [b]=arr.splice(+c.dataset.cover,1); arr.unshift(b); render(); toast('已換成封面'); } });
   return { get:()=>arr.slice(), set(a){ arr=[...(a||[])]; render(); }, add(bs){ const room=MAXPH-arr.length; if(bs.length>room) toast(`一張唱片最多 ${MAXPH} 張照片`); arr.push(...bs.slice(0,Math.max(0,room))); render(); } };
 }
+let sDiscUrl='';
 const sGrid=photoGrid($('#sPhotos'),arr=>{ if(!pending) return; pending.photos=arr; pending.photo=arr[0]||null;
-  $('#saveDisc').innerHTML=arr[0]?`<i style="background-image:url(${URL.createObjectURL(arr[0])})"></i>`:''; });
+  if(sDiscUrl) URL.revokeObjectURL(sDiscUrl); sDiscUrl=arr[0]?URL.createObjectURL(arr[0]):'';
+  $('#saveDisc').innerHTML=sDiscUrl?`<i style="background-image:url(${sDiscUrl})"></i>`:''; });
 let photoTask=null;
 $('#sPhoto').addEventListener('change',e=>{
   const fs=[...e.target.files]; e.target.value=''; if(!fs.length||!pending) return;
-  $('#saveBtn').textContent='照片處理中…';
-  photoTask=Promise.all(fs.map(f=>shrinkImg(f,1600))).then(bs=>sGrid.add(bs)).finally(()=>{ $('#saveBtn').textContent='收進唱片櫃'; });
+  const p=pending; $('#saveBtn').textContent='照片處理中…';
+  /* 接在前一批後面：連續選兩次照片也不會漏掉 */
+  photoTask=(photoTask||Promise.resolve()).then(()=>processPhotos(fs,(i,n)=>{ $('#saveBtn').textContent=`照片處理中 ${i+1}/${n}…`; }))
+    .then(bs=>{ if(pending===p) sGrid.add(bs); }).catch(()=>{}).finally(()=>{ $('#saveBtn').textContent='收進唱片櫃'; });
+  const mine=photoTask; mine.finally(()=>{ if(photoTask===mine) photoTask=null; });
 });
 let saving=false, nextUp=null;
 $('#saveBtn').addEventListener('click',async()=>{
   if(!pending||saving) return;
-  if(photoTask){ saving=true; try{ await photoTask; }catch(e){} photoTask=null; saving=false; }
+  const pRef=pending; saving=true; $('#sPhoto').disabled=true;
+  while(photoTask){ try{ await photoTask; }catch(e){} }
+  $('#sPhoto').disabled=false; saving=false;
+  if(pending!==pRef||!pending) return;
   pending.photos=sGrid.get(); pending.photo=pending.photos[0]||null;
   if(!$('#sTitle').value.trim()){ $('#sTitle').value=pending.q.replace(/[？?]$/,''); }
   saving=true;
@@ -1101,7 +1305,7 @@ $('#shelfMain').addEventListener('click',async e=>{
   } else if(a==='del'){
     if(confirm(`確定刪除「${s.title}」嗎？刪除後無法復原。`)){ if(playingId===s.id){player.pause();playingId=null;} await delStory(s.id); selId=(list[i+1]||list[i-1])?.id||null; renderShelf(); toast('已刪除'); }
   } else if(a==='edit'){
-    editing=s; ePhotoTask=null; $('#eTitle').value=s.title; $('#eEra').value=s.era||''; $('#eText').value=s.text||''; $('#ePhoto').value='';
+    editing=s; editGen++; ePhotoTask=null; $('#eSave').textContent='儲存'; $('#eTitle').value=s.title; $('#eEra').value=s.era||''; $('#eText').value=s.text||''; $('#ePhoto').value='';
     eGrid.set(photosOf(s)); open('#editM');
   }
 });
@@ -1111,14 +1315,19 @@ document.addEventListener('keydown',e=>{
   if(e.key==='ArrowRight'||e.key==='ArrowLeft'){ const j=list.findIndex(x=>x.id===selId)+(e.key==='ArrowRight'?1:-1); if(list[j]){ selId=list[j].id; renderShelf(); } }
   if(e.key===' '&&!/BUTTON/.test(document.activeElement?.tagName||'')){ e.preventDefault(); $('#hPlay')?.click(); }
 });
-$('#eCancel').addEventListener('click',()=>close('#editM'));
-const eGrid=photoGrid($('#ePhotos'));
+$('#eCancel').addEventListener('click',()=>{ editGen++; ePhotoTask=null; close('#editM'); });
+const eGrid=photoGrid($('#ePhotos')); let editGen=0;
 let ePhotoTask=null;
 $('#ePhoto').addEventListener('change',e=>{ const fs=[...e.target.files]; e.target.value=''; if(!fs.length) return;
-  $('#eSave').textContent='照片處理中…'; ePhotoTask=Promise.all(fs.map(f=>shrinkImg(f,1600))).then(bs=>eGrid.add(bs)).finally(()=>{ $('#eSave').textContent='儲存'; }); });
-$('#eSave').addEventListener('click',async()=>{ if(ePhotoTask){ try{ await ePhotoTask; }catch(e){} ePhotoTask=null; }
-  editing.photos=eGrid.get(); editing.photo=editing.photos[0]||null; Object.assign(editing,{title:$('#eTitle').value.trim()||editing.title,era:$('#eEra').value.trim(),text:$('#eText').value.trim()});
-  await putStory(editing); close('#editM'); renderShelf(); toast('已儲存'); });
+  const g=editGen; $('#eSave').textContent='照片處理中…';
+  ePhotoTask=(ePhotoTask||Promise.resolve()).then(()=>processPhotos(fs,(i,n)=>{ $('#eSave').textContent=`照片處理中 ${i+1}/${n}…`; }))
+    .then(bs=>{ if(editGen===g) eGrid.add(bs); }).catch(()=>{}).finally(()=>{ $('#eSave').textContent='儲存'; });
+  const mine=ePhotoTask; mine.finally(()=>{ if(ePhotoTask===mine) ePhotoTask=null; }); });
+$('#eSave').addEventListener('click',async()=>{ const g=editGen;
+  while(ePhotoTask){ try{ await ePhotoTask; }catch(e){} } if(g!==editGen) return;
+  const photos=eGrid.get(), upd={...editing,photos,photo:photos[0]||null,title:$('#eTitle').value.trim()||editing.title,era:$('#eEra').value.trim(),text:$('#eText').value.trim()};
+  try{ await putStory(upd); }catch(e){ toast('存不進去，可能是空間不夠。請少放幾張照片，或先刪掉舊唱片'); return; }
+  editGen++; close('#editM'); renderShelf(); toast('已儲存'); });
 function dl(blob,name){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name.replace(/[\\/:*?"<>|]/g,''); document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000); }
 
 /* ---------- 分享：轉成每支手機、LINE 都能播的檔案 ----------
@@ -1175,7 +1384,7 @@ async function buildScene(s,W,pcm,rate){
     if(im){
       const t=document.createElement('canvas'); t.width=t.height=48; const tx=t.getContext('2d');
       const s0=Math.max(48/im.width,48/im.height); tx.drawImage(im,(48-im.width*s0)/2,(48-im.height*s0)/2,im.width*s0,im.height*s0);
-      x.drawImage(t,-W*.08,-W*.08,W*1.16,W*1.16);
+      x.drawImage(t,-W*.08,-W*.08,W*1.16,W*1.16); t.width=t.height=0;
       x.fillStyle='rgba(0,0,0,.58)'; x.fillRect(0,0,W,W);
       let g=x.createLinearGradient(0,W*.58,0,W); g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1,'rgba(0,0,0,.94)'); x.fillStyle=g; x.fillRect(0,0,W,W);
       g=x.createLinearGradient(0,0,0,W*.15); g.addColorStop(0,'rgba(0,0,0,.6)'); g.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle=g; x.fillRect(0,0,W,W*.15);
@@ -1253,10 +1462,10 @@ async function buildScene(s,W,pcm,rate){
     x.fillStyle='#E4CB86'; x.fillRect(p0,py-2*k,(p1-p0)*pr,4*k);
     x.beginPath(); x.arc(p0+(p1-p0)*pr,py,8*k,0,7); x.fill();
   }
-  return {draw,frames:bases.length};
+  return {draw,frames:bases.length,dispose(){ bases.forEach(c=>{ c.width=c.height=0; }); bases.length=0; }};
 }
 /* 舊名稱留著：靜態封面（第 0 秒的畫面） */
-async function drawCover(s,W=1080){ const [c,x]=mkCanvas(W); const sc=await buildScene(s,W,null,16000); sc.draw(x,0); return c; }
+async function drawCover(s,W=1080){ const [c,x]=mkCanvas(W); const sc=await buildScene(s,W,null,16000); sc.draw(x,0); sc.dispose(); return c; }
 async function makeMP4(s,onProg,cap){
   if(!window.VideoEncoder||!window.AudioEncoder||!window.VideoFrame||!window.AudioData) throw new Error('no-webcodecs');
   let acfg=null;
@@ -1302,6 +1511,7 @@ async function makeMP4(s,onProg,cap){
     if(++done%15===0){ onProg(.05+.9*done/total,`正在做成影片…`); await tick0(); }
   }
   await pushAudio(Infinity);
+  scene.dispose(); cv.width=cv.height=0;
   await venc.flush(); await aenc.flush(); venc.close(); aenc.close(); if(err) throw err;
   muxer.finalize();
   return new Blob([muxer.target.buffer],{type:'video/mp4'});
@@ -1337,7 +1547,7 @@ async function makeMP4Live(s,onProg,ctx,cap){ liveCap=cap;
   mr.start(1000); t0=ctx.currentTime+.15; srcNode.start(t0);
   srcNode.onended=()=>setTimeout(()=>{ try{ mr.stop(); }catch(e){} },400);
   liveAbort=()=>{ try{ srcNode.stop(); }catch(e){} try{ mr.stop(); }catch(e){} };
-  try{ await done; } finally { clearInterval(iv); liveAbort=null; vstream.getTracks().forEach(t=>t.stop()); try{ lk?.release(); }catch(e){} }
+  try{ await done; } finally { clearInterval(iv); liveAbort=null; vstream.getTracks().forEach(t=>t.stop()); try{ lk?.release(); }catch(e){} scene.dispose(); cv.width=cv.height=0; }
   const blob=new Blob(parts,{type:'video/mp4'}); if(!blob.size) throw new Error('empty');
   return blob;
 }
@@ -1397,7 +1607,7 @@ async function getSrc16(s,{cap,onProg}={}){
 async function hasSound(blob,refRms,cap){
   let pcm=null;
   try{ pcm=await decodeMono(blob,8000); }catch(e){}
-  if(!pcm&&cap){ try{ const d=(await new Promise(r=>{ const v=document.createElement('video'); v.preload='metadata'; v.muted=true; v.onloadedmetadata=()=>r(v.duration); v.onerror=()=>r(0); v.src=URL.createObjectURL(blob); }))||0;
+  if(!pcm&&cap){ try{ const d=(await new Promise(r=>{ const v=document.createElement('video'), vu=URL.createObjectURL(blob); v.preload='metadata'; v.muted=true; v.onloadedmetadata=()=>{ r(v.duration); URL.revokeObjectURL(vu); }; v.onerror=()=>{ r(0); URL.revokeObjectURL(vu); }; v.src=vu; }))||0;
       const g=await cap.grab(blob,{start:d*.3,maxSec:Math.min(4,Math.max(1,d*.3))}); pcm=g.pcm; }catch(e){ console.warn('verify-el',e); } }
   if(!pcm) return true;
   return rmsOf(pcm)>Math.max(2e-4,refRms*0.25);
@@ -1492,20 +1702,109 @@ async function renderSpace(a){
   }catch(e){ box.hidden=true; }
 }
 const b64=blob=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(blob);});
-$('#bookBtn').addEventListener('click',async()=>{
-  const a=(await allStories()).slice().sort((x,y)=>CATS.indexOf(catOf(x.cat))-CATS.indexOf(catOf(y.cat))||x.created-y.created);
-  if(!a.length){ toast('還沒有故事可以印'); return; }
-  const parts=[];
-  for(const s of a){ const c=catOf(s.cat); let img=''; for(const b of photosOf(s)) img+=`<img src="${await b64(b)}" alt="">`;
-    parts.push(`<article><h3>${esc(s.title)}</h3><div class="m">${c.name}${s.era?'・'+esc(s.era):''}・錄於 ${day(s.created)}・問題：${esc(s.q)}</div>${img}<p>${esc(s.text||'（這個故事留在錄音裡，請聽原聲）')}</p></article>`); }
-  $('#book').innerHTML=`<h1>${esc(elder.name||'家人')}的生命故事</h1><div class="sub">${elder.year?esc(elder.year)+' 年生・':''}共 ${a.length} 個故事・時光留聲機整理</div>${parts.join('')}`;
-  setTimeout(()=>window.print(),300);
+/* ---------- 故事書設計工作室 ---------- */
+const TPLS=[{id:'vintage',name:'復古相簿',desc:'米色紙、相角、像老相簿'},{id:'noir',name:'典雅黑金',desc:'黑底金框，適合存 PDF 看'},
+  {id:'water',name:'溫暖水彩',desc:'手寫字、柔和水彩'},{id:'classic',name:'經典書冊',desc:'白底紅線，像出版的書'}];
+let bk={tpl:'vintage',title:'',sub:'',dedi:'',cover:'',toc:true,chap:true,more:true,order:'life'}, bkUrls=[], bkJob=0, bkTimer=0;
+const bkDefTitle=()=>`${elder.name||'家人'}的生命故事`, bkDefSub=()=>elder.year?`${elder.year} 年生`:'一輩子的故事，說給我們聽';
+$('#bookBtn').addEventListener('click',()=>go('studio'));
+let bkFontLoaded=false;
+async function renderStudio(){
+  if(!bkFontLoaded){ bkFontLoaded=true; const l=document.createElement('link'); l.rel='stylesheet'; l.href='https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&display=swap'; document.head.appendChild(l); }
+  try{ bk={...bk,...((await getMeta('bookOpts'))||{})}; }catch(e){}
+  $('#bkTitle').value=bk.title; $('#bkTitle').placeholder=bkDefTitle();
+  $('#bkSub').value=bk.sub; $('#bkSub').placeholder=bkDefSub();
+  $('#bkDedi').value=bk.dedi; $('#bkToc').checked=bk.toc; $('#bkChap').checked=bk.chap; $('#bkMore').checked=bk.more; $('#bkOrder').value=bk.order;
+  $('#tpls').innerHTML=TPLS.map(t=>`<button type="button" class="tp tp-${t.id} ${bk.tpl===t.id?'on':''}" data-tpl="${t.id}"><span class="tp-sw"></span><b>${t.name}</b><span>${t.desc}</span></button>`).join('');
+  const a=await allStories();
+  bkUrls.forEach(URL.revokeObjectURL); bkUrls=[];
+  const all=[]; a.forEach(st=>photosOf(st).forEach((b,i)=>all.push({k:`${st.id}:${i}`,b})));
+  $('#coverPick').innerHTML=`<button type="button" data-cv="none" class="${bk.cover==='none'?'on':''}">不放照片</button>`+
+    all.slice(0,40).map(x=>{ const u=URL.createObjectURL(x.b); bkUrls.push(u); return `<button type="button" data-cv="${x.k}" class="${bk.cover===x.k||(!bk.cover&&x===all[0])?'on':''}"><img src="${u}" alt=""></button>`; }).join('');
+  const inApp2=inApp?'在 LINE、Facebook 裡可能沒辦法列印，請改用 Chrome 或 Safari 開啟。':'';
+  $('#bkHow').textContent=(isMobile?(/iPhone|iPad|iPod/i.test(UA)?'iPhone：按下去後選「列印」畫面右上的分享 → 儲存到「檔案」，就是 PDF。':'Android：在列印畫面上方選「儲存為 PDF」。'):'在列印視窗的「目的地」選「另存為 PDF」，記得勾選「背景圖形」。')+inApp2;
+  buildBook();
+}
+const saveBk=()=>{ setMeta('bookOpts',bk).catch(()=>{}); clearTimeout(bkTimer); bkTimer=setTimeout(buildBook,250); };
+$('#tpls').addEventListener('click',e=>{ const b=e.target.closest('[data-tpl]'); if(!b) return; bk.tpl=b.dataset.tpl; document.querySelectorAll('#tpls .tp').forEach(x=>x.classList.toggle('on',x===b)); saveBk(); });
+$('#coverPick').addEventListener('click',e=>{ const b=e.target.closest('[data-cv]'); if(!b) return; bk.cover=b.dataset.cv; document.querySelectorAll('#coverPick button').forEach(x=>x.classList.toggle('on',x===b)); saveBk(); });
+[['#bkTitle','title'],['#bkSub','sub'],['#bkDedi','dedi']].forEach(([id,k])=>$(id).addEventListener('input',e=>{ bk[k]=e.target.value; saveBk(); }));
+[['#bkToc','toc'],['#bkChap','chap'],['#bkMore','more']].forEach(([id,k])=>$(id).addEventListener('change',e=>{ bk[k]=e.target.checked; saveBk(); }));
+$('#bkOrder').addEventListener('change',e=>{ bk.order=e.target.value; saveBk(); });
+
+function bkScale(){ const pv=$('#bkPreview'); if(!pv) return; const w=Math.min(pv.clientWidth-28,620); pv.style.setProperty('--s',Math.max(.2,w/793.7)); }
+window.addEventListener('resize',()=>{ if(view==='studio') bkScale(); });
+async function buildBook(){
+  const job=++bkJob, a=await allStories(); if(job!==bkJob) return;
+  const pv=$('#bkPreview'); if(!a.length){ pv.innerHTML='<div class="empty-state"><h3>還沒有唱片</h3><p>先錄下第一個故事，這裡就會排出故事書。</p><button class="btn" data-go="topics">開始聊天</button></div>'; $('#bkCount').textContent=''; return; }
+  $('#bkBusy').textContent='排版中…';
+  pv.querySelectorAll('img').forEach(i=>{ if(i.src.startsWith('blob:')&&!bkUrls.includes(i.src)) URL.revokeObjectURL(i.src); });
+  const T=bk.tpl, title=bk.title.trim()||bkDefTitle(), sub=bk.sub.trim()||bkDefSub();
+  const order=bk.order==='time'?a.slice().sort((x,y)=>x.created-y.created):a.slice().sort((x,y)=>CATS.indexOf(catOf(x.cat))-CATS.indexOf(catOf(y.cat))||x.created-y.created);
+  let meas=$('#bkMeasure'); if(!meas){ meas=document.createElement('div'); meas.id='bkMeasure'; document.body.appendChild(meas); } meas.innerHTML='';
+  const made=[];
+  const U=b=>{ const u=URL.createObjectURL(b); made.push(u); return u; };
+  const ph=(b,cls='')=>`<div class="bk-photo ${cls}"><span class="cn a"></span><span class="cn b"></span><span class="cn c"></span><span class="cn d"></span><img src="${U(b)}" alt=""></div>`;
+  const page=(type,inner,o={})=>{ const el=document.createElement('div'); el.className=`bk-page t-${T} ${type}`; if(o.c) el.style.setProperty('--ch-c',o.c); el.innerHTML=inner; el._foot=o.foot!==false; meas.appendChild(el); return el; };
+  const fit=(box,p,text)=>{ p.textContent=text; if(box.scrollHeight<=box.clientHeight+1) return '';
+    let lo=0,hi=text.length; while(lo<hi){ const mid=(lo+hi+1)>>1; p.textContent=text.slice(0,mid); if(box.scrollHeight<=box.clientHeight+1) lo=mid; else hi=mid-1; }
+    let cut=lo; const back=text.slice(Math.max(0,lo-50),lo), m=Math.max(back.lastIndexOf('\n'),back.lastIndexOf('。'),back.lastIndexOf('！'),back.lastIndexOf('？'),back.lastIndexOf('，'));
+    if(m>=0&&lo>60) cut=lo-back.length+m+1; p.textContent=text.slice(0,cut); return text.slice(cut).replace(/^\n+/,''); };
+  /* 封面照片 */
+  let cover=null; if(bk.cover!=='none'){ for(const st of a){ photosOf(st).forEach((b,i)=>{ if(!cover&&(bk.cover?`${st.id}:${i}`===bk.cover:true)) cover=b; }); } if(!cover&&bk.cover) for(const st of a){ const p0=photosOf(st)[0]; if(p0){ cover=p0; break; } } }
+  const front=[], content=[], tocRows=[];
+  front.push(page('cv',`<div class="bk-in"><div class="bk-kicker">A Life in Stories</div>${cover?ph(cover,'cv-photo'):'<div class="cv-photo cv-disc"></div>'}<h1 class="bk-h cv-title">${esc(title)}</h1><div class="cv-sub">${esc(sub)}</div><div class="cv-orn"></div></div><div class="cv-brand">時光留聲機　·　PHONOGRAPH OF TIME</div>`,{foot:false}));
+  if(bk.dedi.trim()) front.push(page('dd',`<div class="bk-in"><div class="bk-kicker">Dedication</div><p>${esc(bk.dedi.trim())}</p><div class="cv-orn"></div></div>`,{foot:false}));
+  let chapNo=0, storyNo=0, lastCat=null;
+  for(const st of order){
+    const c=catOf(st.cat);
+    if(bk.order==='life'&&st.cat!==lastCat){ lastCat=st.cat; chapNo++;
+      const n=order.filter(x=>x.cat===st.cat).length;
+      tocRows.push({ch:c.name,at:content.length});
+      if(bk.chap) content.push(page('ch',`<div class="bk-in"><div class="ch-ring"><i></i></div><div class="ch-no">CHAPTER ${String(chapNo).padStart(2,'0')}</div><h2 class="bk-h ch-name">${c.name}</h2><div class="ch-tag">${c.tag}</div><div class="ch-tag" style="margin-top:3mm">${n} 個故事</div></div>`,{c:c.color})); }
+    storyNo++;
+    const pics=photosOf(st), first=pics.slice(0,3), rest=bk.more?pics.slice(3):[];
+    const meta=[st.era,`錄於 ${day(st.created)}`,`錄音 ${fmt(st.duration)}`].filter(Boolean).join('　·　');
+    tocRows.push({t:st.title,at:content.length});
+    const top=`<div class="st-top"><span class="bk-kicker">${c.name}</span><span class="bk-kicker">No.${String(storyNo).padStart(2,'0')}</span></div>`;
+    const el=page('st',`<div class="bk-in">${top}<h2 class="bk-h st-title">${esc(st.title)}</h2><div class="st-meta">${esc(meta)}</div><div class="st-q">問：${esc(st.q)}</div>${first.length?`<div class="st-ph n${first.length}">${first.map(b=>ph(b)).join('')}</div>`:''}<div class="st-body"><p class="st-text"></p></div></div>`,{c:c.color});
+    content.push(el);
+    const box=el.querySelector('.st-body'), pEl=el.querySelector('.st-text'), text=(st.text||'').trim();
+    if(!text){ pEl.outerHTML=`<p class="st-empty">這個故事收在錄音裡（${fmt(st.duration)}）。<br>打開時光留聲機，就能聽到原本的聲音。</p>`; }
+    else{ let left=fit(box,pEl,text), guard=0;
+      while(left&&guard++<30){ const ce=page('st',`<div class="bk-in">${top}<div class="st-cont">〈${esc(st.title)}〉（續）</div><div class="st-body"><p class="st-text nc"></p></div></div>`,{c:c.color});
+        content.push(ce); left=fit(ce.querySelector('.st-body'),ce.querySelector('.st-text'),left); } }
+    for(let i=0;i<rest.length;i+=6){ const chunk=rest.slice(i,i+6);
+      content.push(page('pp',`<div class="bk-in">${top}<div class="st-cont">〈${esc(st.title)}〉的照片</div><div class="pp-grid ${chunk.length<=2?'few':''}">${chunk.map(b=>ph(b)).join('')}</div></div>`,{c:c.color})); }
+  }
+  const secs=a.reduce((t,x)=>t+(x.duration||0),0), d0=Math.min(...a.map(x=>x.created)), d1=Math.max(...a.map(x=>x.created));
+  const back=page('bc',`<div class="bk-in"><div class="bk-kicker">The End</div><div class="big">這本書收錄了 ${a.length} 個故事</div><p>共 ${Math.max(1,Math.round(secs/60))} 分鐘的聲音　·　${new Set(a.map(x=>x.cat)).size} 段人生</p><p>錄於 ${day(d0)}${d1-d0>864e5?' – '+day(d1):''}</p><div class="cv-orn"></div><p style="margin-top:8mm">時光留聲機　整理</p></div>`,{foot:false});
+  /* 目錄 */
+  const tocPages=[];
+  if(bk.toc){ const per=24, n=Math.max(1,Math.ceil(tocRows.length/per)), base=front.length+n;
+    for(let i=0;i<n;i++){ const rows=tocRows.slice(i*per,(i+1)*per).map(r=>r.ch?`<div class="toc-ch">${r.ch}</div>`:`<div class="toc-row"><span class="tt">${esc(r.t)}</span><span class="dots"></span><span class="pn">${base+r.at+1}</span></div>`).join('');
+      tocPages.push(page('toc',`<div class="bk-in">${i===0?'<h2 class="bk-h toc-h">目　錄</h2>':''}${rows}</div>`)); } }
+  const pages=[...front,...tocPages,...content,back];
+  pages.forEach((el,i)=>{ if(el._foot){ const f=document.createElement('div'); f.className='bk-foot'; f.innerHTML=`<span>${esc(title)}</span><span>${i+1}</span>`; el.appendChild(f); } });
+  if(job!==bkJob){ made.forEach(URL.revokeObjectURL); return; }
+  pv.innerHTML=''; bkScale();
+  pages.forEach((el,i)=>{ const slot=document.createElement('div'); slot.className='bk-slot'; slot.appendChild(el); const n=document.createElement('span'); n.className='pno'; n.textContent=i===0?'封面':i===pages.length-1?'封底':`第 ${i+1} 頁`; slot.appendChild(n); pv.appendChild(slot); });
+  $('#bkCount').textContent=`共 ${pages.length} 頁（A4）`; $('#bkBusy').textContent='';
+}
+$('#bkPrint').addEventListener('click',async()=>{
+  const pages=[...document.querySelectorAll('#bkPreview .bk-page')]; if(!pages.length){ toast('還沒有故事可以印'); return; }
+  $('#bkBusy').textContent='準備列印…';
+  const bookEl=$('#book'); bookEl.innerHTML=''; pages.forEach(p=>bookEl.appendChild(p.cloneNode(true)));
+  try{ await document.fonts.ready; await Promise.all([...bookEl.querySelectorAll('img')].map(i=>i.decode?i.decode().catch(()=>{}):null)); }catch(e){}
+  $('#bkBusy').textContent='';
+  setTimeout(()=>window.print(),100);
 });
+window.addEventListener('afterprint',()=>{ $('#book').innerHTML=''; });
 $('#backupBtn').addEventListener('click',async()=>{
   const a=await allStories(); if(!a.length){ toast('還沒有唱片可以備份'); return; }
   toast('正在打包，請稍等…');
   const parts=[`{"app":"life-phono","v":1,"elder":${JSON.stringify(elder)},"stories":[`];
-  for(let i=0;i<a.length;i++){ const s=a[i]; parts.push((i?',':'')+JSON.stringify({...s,pcm16:undefined,audio:await b64(s.audio),photo:s.photo?await b64(s.photo):null,photos:await Promise.all(photosOf(s).map(b64))})); }
+  for(let i=0;i<a.length;i++){ const s=a[i]; parts.push((i?',':'')+JSON.stringify({...s,pcm16:undefined,audio:await b64(s.audio),photo:null,photos:await Promise.all(photosOf(s).map(b64))})); }
   parts.push(']}');
   dl(new Blob(parts,{type:'application/json'}),`時光留聲機備份-${elder.name||'家人'}-${new Date().toISOString().slice(0,10)}.json`);
   try{ localStorage.setItem('phono-last-backup',String(Date.now())); }catch(e){}
